@@ -1,8 +1,7 @@
 import os
 
-from dotenv import load_dotenv
-
-load_dotenv()
+# Env vars are injected by dotenvx at runtime (dotenvx run -- uvicorn ...)
+# No python-dotenv needed.
 
 # Google Gemini API
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")

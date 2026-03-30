@@ -12,11 +12,11 @@ run = [
 
 [tasks.dev-backend]
 description = "Run doc_extractor backend"
-run = "cd backend/doc_extractor && uv run uvicorn app:app --reload --port 8002"
+run = "cd backend/doc_extractor && dotenvx run -f ../../.env -- uv run uvicorn app:app --reload --port 8002"
 
 [tasks.dev-frontend]
 description = "Run Next.js frontend"
-run = "cd frontend && bun run dev"
+run = "dotenvx run -- bun run --cwd frontend dev"
 
 # --- Backend checks (Python) ---
 

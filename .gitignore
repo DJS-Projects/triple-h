@@ -7,10 +7,9 @@ __pycache__/
 .venv/
 venv/
 
-# Environment
-.env
-.env.local
-.env.production
+# Environment (dotenvx)
+# .env is committed (encrypted), .env.keys is NOT
+.env.keys
 
 # Build output
 dist/
@@ -27,6 +26,3 @@ Thumbs.db
 
 # PDFs (uploaded files)
 backend/doc_extractor/pdfs/
-
-# Prisma
-src/generated/

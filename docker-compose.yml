@@ -5,9 +5,9 @@ services:
       dockerfile: backend/Dockerfile
     ports:
       - "8002:8002"
-    env_file:
-      - backend/doc_extractor/.env
     volumes:
+      - ./.env:/app/.env:ro
+      - ./.env.keys:/app/.env.keys:ro
       - pdf-uploads:/app/pdfs
     restart: unless-stopped
 

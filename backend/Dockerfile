@@ -6,12 +6,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     libgl1 \
     libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Install dotenvx
+RUN curl -sfS https://dotenvx.sh | sh
 
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
 
 # Copy project definition and install deps
 COPY pyproject.toml uv.lock ./
@@ -26,4 +30,4 @@ ENV PDFS_DIR=/app/pdfs
 
 EXPOSE 8002
 
-CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["dotenvx", "run", "--", "uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
