@@ -20,6 +20,16 @@ run = "cd frontend && bun install"
 description = "Install pre-commit hooks"
 run = "uv run pre-commit install"
 
+# --- Env ---
+
+[tasks.encrypt]
+description = "Encrypt .env files with dotenvx"
+run = "dotenvx encrypt"
+
+[tasks.decrypt]
+description = "Decrypt .env files with dotenvx"
+run = "dotenvx decrypt"
+
 # --- Dev ---
 
 [tasks.dev-backend]
