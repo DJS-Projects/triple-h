@@ -1,12 +1,12 @@
 [tools]
 python = "3.12"
-node = "22"
+bun = "latest"
 
 [tasks.setup]
-description = "Install all dependencies (backend dev tools + frontend)"
+description = "Install all dependencies"
 run = [
     "uv sync",
-    "cd frontend && npm install",
+    "cd frontend && bun install",
     "uv run pre-commit install",
 ]
 
@@ -16,7 +16,9 @@ run = "cd backend/doc_extractor && uv run uvicorn app:app --reload --port 8002"
 
 [tasks.dev-frontend]
 description = "Run Next.js frontend"
-run = "cd frontend && npm run dev"
+run = "cd frontend && bun run dev"
+
+# --- Backend checks (Python) ---
 
 [tasks.lint]
 description = "Run ruff linter on backend"
@@ -30,7 +32,23 @@ run = "uv run ruff format backend/"
 description = "Run mypy on backend"
 run = "uv run mypy backend/doc_extractor/"
 
+# --- Frontend checks (Biome) ---
+
+[tasks."fe:check"]
+description = "Run biome check on frontend"
+run = "cd frontend && bunx biome check ."
+
+[tasks."fe:lint"]
+description = "Run biome lint on frontend"
+run = "cd frontend && bunx biome lint ."
+
+[tasks."fe:format"]
+description = "Run biome format on frontend"
+run = "cd frontend && bunx biome format --write ."
+
+# --- All checks ---
+
 [tasks.check]
-description = "Run all checks (lint + format + typecheck)"
-depends = ["lint", "typecheck"]
+description = "Run all checks (backend + frontend)"
+depends = ["lint", "typecheck", "fe:check"]
 run = "uv run ruff format --check backend/"

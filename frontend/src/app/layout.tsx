@@ -1,42 +1,36 @@
-// talent-spectrum-app/src/app/layout.tsx
-
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
-import { Providers } from "./providers"; // Assuming this is also a client component or contains client components
-import PageWrapper from "./PageWrapper"; // client wrapper
 
-// --- LOGIC ADDITION: Import the new client-side SessionProvider wrapper ---
-import { NextAuthSessionProvider } from "./providers/NextAuthSessionProvider";
-// --- END LOGIC ADDITION ---
-
-// Initialize Geist fonts as per your original code
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Heng Hup Holdings - AI Powered Platform",
-  description:
-    "A platform that leverages AI to enhance business operations and decision-making.",
+	title: "Heng Hup Holdings — Document Extractor",
+	description: "AI-powered document extraction for delivery orders, invoices, and weighing bills",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
-      >
-        {/* Wrap with the new client-side SessionProvider wrapper */}
-        <NextAuthSessionProvider>
-          <Providers>
-            <PageWrapper>{children}</PageWrapper>
-          </Providers>
-        </NextAuthSessionProvider>
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+	return (
+		<html lang="en">
+			<body className={`${geist.className} bg-gray-50 text-gray-900 antialiased`}>
+				<header className="border-b bg-white">
+					<nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+						<Link href="/" className="text-lg font-bold text-blue-700">
+							Heng Hup Holdings
+						</Link>
+						<div className="flex gap-6 text-sm">
+							<Link href="/delivery-orders" className="text-gray-600 hover:text-gray-900">
+								Delivery Orders
+							</Link>
+							<Link href="/documents" className="text-gray-600 hover:text-gray-900">
+								Mixed Documents
+							</Link>
+						</div>
+					</nav>
+				</header>
+				<main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+			</body>
+		</html>
+	);
 }
