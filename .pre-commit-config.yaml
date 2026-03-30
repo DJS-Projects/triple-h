@@ -11,6 +11,15 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
 
+  - repo: local
+    hooks:
+      - id: check-env-encrypted
+        name: check .env values are encrypted
+        entry: python scripts/check_env_encrypted.py
+        language: system
+        files: ^\.env
+        types: [file]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.4
     hooks:

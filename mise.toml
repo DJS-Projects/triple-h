@@ -2,13 +2,25 @@
 python = "3.12"
 bun = "latest"
 
+# --- Setup ---
+
 [tasks.setup]
-description = "Install all dependencies"
-run = [
-    "uv sync",
-    "cd frontend && bun install",
-    "uv run pre-commit install",
-]
+description = "Install all dependencies and hooks"
+depends = ["setup:backend", "setup:frontend", "setup:hooks"]
+
+[tasks."setup:backend"]
+description = "Install Python dependencies"
+run = "uv sync"
+
+[tasks."setup:frontend"]
+description = "Install frontend dependencies"
+run = "cd frontend && bun install"
+
+[tasks."setup:hooks"]
+description = "Install pre-commit hooks"
+run = "uv run pre-commit install"
+
+# --- Dev ---
 
 [tasks.dev-backend]
 description = "Run doc_extractor backend"

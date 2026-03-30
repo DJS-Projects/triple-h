@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dotenvx
+# Install dotenvx for encrypted .env decryption at runtime
 RUN curl -sfS https://dotenvx.sh | sh
 
 # Install uv for fast dependency resolution
@@ -21,6 +21,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen
 
+# Copy encrypted .env (decrypted at runtime by dotenvx)
+COPY .env .env
+
 # Copy backend code
 COPY backend/doc_extractor/ ./
 
@@ -30,4 +33,5 @@ ENV PDFS_DIR=/app/pdfs
 
 EXPOSE 8002
 
+# dotenvx decrypts .env using DOTENV_PRIVATE_KEY env var, then injects into process
 CMD ["dotenvx", "run", "--", "uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]

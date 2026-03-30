@@ -5,9 +5,10 @@ services:
       dockerfile: backend/Dockerfile
     ports:
       - "8002:8002"
+    environment:
+      # dotenvx decrypts the baked-in .env using this key
+      - DOTENV_PRIVATE_KEY=${DOTENV_PRIVATE_KEY}
     volumes:
-      - ./.env:/app/.env:ro
-      - ./.env.keys:/app/.env.keys:ro
       - pdf-uploads:/app/pdfs
     restart: unless-stopped
 
@@ -18,7 +19,12 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - DOTENV_PRIVATE_KEY=${DOTENV_PRIVATE_KEY}
+      # Override backend URL to use Docker service name
       - DOC_EXTRACTOR_URL=http://backend:8002
+    volumes:
+      # Mount encrypted .env for dotenvx to decrypt at runtime
+      - ./.env:/app/.env:ro
     depends_on:
       - backend
     restart: unless-stopped
