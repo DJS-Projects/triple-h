@@ -1,6 +1,5 @@
 import re
 
-
 # Common OCR error corrections
 _PHRASE_FIXES = {
     # Delivery Order variations
@@ -43,15 +42,15 @@ def postprocess_ocr_text(text: str, apply_normalization: bool = True) -> str:
         text = normalize_phrases(text)
 
     # Fix spacing around punctuation
-    text = re.sub(r'\s+([.,;:])', r'\1', text)
-    text = re.sub(r'([.,;:])(?!\d)\s*', r'\1 ', text)
+    text = re.sub(r"\s+([.,;:])", r"\1", text)
+    text = re.sub(r"([.,;:])(?!\d)\s*", r"\1 ", text)
 
     # Clean excessive whitespace
-    text = re.sub(r'\n\s*\n', '\n', text)
-    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r"\n\s*\n", "\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
 
     # Remove leading zeros in numbers (but not in dates/paths)
-    text = re.sub(r'(?<![.:\-/])\b0+([1-9])', r'\1', text)
+    text = re.sub(r"(?<![.:\-/])\b0+([1-9])", r"\1", text)
 
     return text
 

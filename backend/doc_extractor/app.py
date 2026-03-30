@@ -6,35 +6,41 @@ import time
 from datetime import datetime
 
 import google.generativeai as genai
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pypdf import PdfReader
 from pdf2image import convert_from_bytes
+from pypdf import PdfReader
 
+from ai_model import create_ai_model
 from config import (
-    GOOGLE_API_KEY, PDFS_DIR, ALLOWED_ORIGINS,
-    DEFAULT_OCR_ENGINE, DEFAULT_CONFIDENCE_THRESHOLD,
+    ALLOWED_ORIGINS,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    DEFAULT_OCR_ENGINE,
+    GOOGLE_API_KEY,
     MAX_OLLAMA_CONTEXT_CHARS,
-)
-from prompt_template import (
-    DOCUMENT_DETECTION_TEMPLATE,
-    DELIVERY_ORDER_TEMPLATE,
-    WEIGHING_BILL_TEMPLATE,
-    INVOICE_TEMPLATE,
-    MIXED_DOCUMENT_TEMPLATE,
-)
-from ocr import (
-    perform_ocr_tesseract, perform_ocr_paddleocr, perform_ocr_ppstructure,
-    TESSERACT_AVAILABLE, PADDLEOCR_AVAILABLE, PPSTRUCTURE_AVAILABLE,
-)
-from table_extraction import (
-    extract_tables_from_pdf, reconstruct_table_as_markdown,
-    analyze_table_structure, clean_cell_content,
+    PDFS_DIR,
 )
 from json_extraction import extract_and_validate_json
-from ai_model import create_ai_model
+from ocr import (
+    PADDLEOCR_AVAILABLE,
+    PPSTRUCTURE_AVAILABLE,
+    TESSERACT_AVAILABLE,
+    perform_ocr_paddleocr,
+    perform_ocr_ppstructure,
+    perform_ocr_tesseract,
+)
+from prompt_template import (
+    DELIVERY_ORDER_TEMPLATE,
+    INVOICE_TEMPLATE,
+    MIXED_DOCUMENT_TEMPLATE,
+    WEIGHING_BILL_TEMPLATE,
+)
+from table_extraction import (
+    extract_tables_from_pdf,
+    reconstruct_table_as_markdown,
+)
 
 # Configure Gemini
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -70,9 +76,8 @@ def detect_document_type(text: str) -> dict:
     has_invoice = any(kw in text_lower for kw in _INVOICE_KEYWORDS)
     has_tin = any(kw in text_lower for kw in _TIN_KEYWORDS)
     if has_invoice and has_tin:
-        score = (
-            sum(1 for kw in _INVOICE_KEYWORDS if kw in text_lower)
-            + sum(1 for kw in _TIN_KEYWORDS if kw in text_lower)
+        score = sum(1 for kw in _INVOICE_KEYWORDS if kw in text_lower) + sum(
+            1 for kw in _TIN_KEYWORDS if kw in text_lower
         )
         detected.append(("invoice", score))
 
@@ -118,21 +123,25 @@ def _run_ocr(engine: str, filepath: str, images: list | None, threshold: float) 
 
     if engine == "paddleocr":
         if images is None:
-            images = convert_from_bytes(open(filepath, 'rb').read())
+            with open(filepath, "rb") as f:
+                images = convert_from_bytes(f.read())
         if PADDLEOCR_AVAILABLE:
             return perform_ocr_paddleocr(images, threshold)
         engine = "tesseract"  # fallback
 
     # tesseract
     if images is None:
-        images = convert_from_bytes(open(filepath, 'rb').read())
+        with open(filepath, "rb") as f:
+            images = convert_from_bytes(f.read())
     if TESSERACT_AVAILABLE:
         return perform_ocr_tesseract(images, threshold)
 
     return ""
 
 
-def extract_text_from_pdf(filepath: str, ocr_model: str = None, confidence_threshold: float = None) -> tuple[str, dict]:
+def extract_text_from_pdf(
+    filepath: str, ocr_model: str | None = None, confidence_threshold: float | None = None
+) -> tuple[str, dict]:
     """
     Extract text from PDF using direct text, table extraction, and OCR.
 
@@ -176,27 +185,27 @@ def extract_text_from_pdf(filepath: str, ocr_model: str = None, confidence_thres
 
 # --- Token counting helper ---
 
+
 def _get_token_usage(answer, provider: str, model_name: str, context: str, response_text: str) -> dict:
     """Extract token usage from LLM response metadata, with Gemini API fallback."""
     usage = {"input_tokens": 0, "output_tokens": 0}
 
     # Try response metadata
-    for attr in ('response_metadata', 'usage_metadata'):
+    for attr in ("response_metadata", "usage_metadata"):
         meta = getattr(answer, attr, None)
         if not meta:
             continue
-        if isinstance(meta, dict):
-            src = meta.get('usage_metadata', meta)
-        else:
-            src = meta
+        src = meta.get("usage_metadata", meta) if isinstance(meta, dict) else meta
         if isinstance(src, dict):
             usage["input_tokens"] = (
-                src.get('prompt_token_count') or src.get('input_tokens')
-                or src.get('promptTokenCount') or 0
+                src.get("prompt_token_count") or src.get("input_tokens") or src.get("promptTokenCount") or 0
             )
             usage["output_tokens"] = (
-                src.get('candidates_token_count') or src.get('completion_token_count')
-                or src.get('output_tokens') or src.get('candidatesTokenCount') or 0
+                src.get("candidates_token_count")
+                or src.get("completion_token_count")
+                or src.get("output_tokens")
+                or src.get("candidatesTokenCount")
+                or 0
             )
         if usage["input_tokens"] or usage["output_tokens"]:
             return usage
@@ -216,6 +225,7 @@ def _get_token_usage(answer, provider: str, model_name: str, context: str, respo
 
 
 # --- API endpoints ---
+
 
 @app.get("/health")
 async def health_check():
@@ -253,7 +263,7 @@ async def upload_pdf(
             f.write(await file.read())
 
         # Extract text
-        text, tables_data = extract_text_from_pdf(filepath, selected_ocr_model, confidence_threshold)
+        text, _tables_data = extract_text_from_pdf(filepath, selected_ocr_model, confidence_threshold)
 
         if not text.strip():
             return {"status": "error", "message": "No extractable text found in PDF."}
@@ -263,7 +273,9 @@ async def upload_pdf(
 
         # Chunk text
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500, chunk_overlap=200, add_start_index=True,
+            chunk_size=1500,
+            chunk_overlap=200,
+            add_start_index=True,
         )
         chunks = splitter.split_text(text)
         context = "\n\n".join(chunks)
@@ -278,15 +290,15 @@ async def upload_pdf(
         file_metadata = {
             "creation_date": datetime.now().isoformat(),
             "last_modified": datetime.now().isoformat(),
-            "detected_types": doc_analysis['detected_types'],
-            "is_mixed": doc_analysis['is_mixed'],
+            "detected_types": doc_analysis["detected_types"],
+            "is_mixed": doc_analysis["is_mixed"],
         }
 
         # Select template
-        if doc_analysis['is_mixed']:
+        if doc_analysis["is_mixed"]:
             template_str = MIXED_DOCUMENT_TEMPLATE
         else:
-            template_str = select_template(doc_analysis['detected_types'][0])
+            template_str = select_template(doc_analysis["detected_types"][0])
 
         # Run AI
         prompt = ChatPromptTemplate.from_template(template_str)
@@ -332,5 +344,6 @@ async def upload_pdf(
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {"status": "error", "message": str(e)}

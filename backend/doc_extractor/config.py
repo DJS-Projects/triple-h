@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,8 +23,12 @@ DEFAULT_CONFIDENCE_THRESHOLD = float(os.getenv("DEFAULT_CONFIDENCE_THRESHOLD", "
 # Ollama (local LLM) configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_AVAILABLE_MODELS = [
-    "gpt-oss:20b", "gemma", "gemma3",
-    "llama3.1", "llama3.2", "qwen3",
+    "gpt-oss:20b",
+    "gemma",
+    "gemma3",
+    "llama3.1",
+    "llama3.2",
+    "qwen3",
 ]
 
 # AI model defaults

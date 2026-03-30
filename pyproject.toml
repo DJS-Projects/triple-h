@@ -1,0 +1,58 @@
+[project]
+name = "triple-h"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.0",
+    "mypy>=1.15.0",
+    "pre-commit>=4.0.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults (FastAPI uses this)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/doc_extractor/prompt_template.py" = [
+    "W291",   # trailing whitespace (inside LLM prompts)
+    "W293",   # blank line contains whitespace (inside LLM prompts)
+    "RUF001", # ambiguous unicode chars (× is intentional in prompts)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "ocr", "text_processing", "table_extraction", "json_extraction", "ai_model", "prompt_template"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["frontend/", "node_modules/"]
+
+[[tool.mypy.overrides]]
+module = "json_extraction"
+warn_return_any = false

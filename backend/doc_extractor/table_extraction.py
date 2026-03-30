@@ -4,6 +4,7 @@ from io import StringIO
 # Optional pdfplumber import
 try:
     import pdfplumber
+
     PDFPLUMBER_AVAILABLE = True
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
@@ -11,7 +12,7 @@ except ImportError:
 
 def extract_tables_from_pdf(filepath: str) -> dict:
     """Extract tables from PDF using pdfplumber. Returns {page_num: [tables]}."""
-    tables_data = {}
+    tables_data: dict[int, list] = {}
     if not PDFPLUMBER_AVAILABLE:
         return tables_data
 
@@ -115,7 +116,7 @@ def reconstruct_table_as_csv(table: list) -> str:
         return ""
 
     output = StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
     writer.writerows(cleaned)
     return output.getvalue().strip()
 
@@ -133,8 +134,19 @@ def analyze_table_structure(table: list) -> dict:
         first_row_clean = [clean_cell_content(c) for c in table[0]]
         first_text = " ".join(first_row_clean).lower()
         header_keywords = [
-            'name', 'description', 'qty', 'quantity', 'price', 'amount',
-            'total', 'item', 'no', 'number', 'date', 'details', 'weight',
+            "name",
+            "description",
+            "qty",
+            "quantity",
+            "price",
+            "amount",
+            "total",
+            "item",
+            "no",
+            "number",
+            "date",
+            "details",
+            "weight",
         ]
         avg_len = sum(len(c) for c in first_row_clean) / max(len(first_row_clean), 1)
         has_header = any(kw in first_text for kw in header_keywords) or (avg_len < 15 and rows > 1)

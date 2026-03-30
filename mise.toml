@@ -1,0 +1,36 @@
+[tools]
+python = "3.12"
+node = "22"
+
+[tasks.setup]
+description = "Install all dependencies (backend dev tools + frontend)"
+run = [
+    "uv sync",
+    "cd frontend && npm install",
+    "uv run pre-commit install",
+]
+
+[tasks.dev-backend]
+description = "Run doc_extractor backend"
+run = "cd backend/doc_extractor && uv run uvicorn app:app --reload --port 8002"
+
+[tasks.dev-frontend]
+description = "Run Next.js frontend"
+run = "cd frontend && npm run dev"
+
+[tasks.lint]
+description = "Run ruff linter on backend"
+run = "uv run ruff check backend/"
+
+[tasks.format]
+description = "Run ruff formatter on backend"
+run = "uv run ruff format backend/"
+
+[tasks.typecheck]
+description = "Run mypy on backend"
+run = "uv run mypy backend/doc_extractor/"
+
+[tasks.check]
+description = "Run all checks (lint + format + typecheck)"
+depends = ["lint", "typecheck"]
+run = "uv run ruff format --check backend/"

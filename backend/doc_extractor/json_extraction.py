@@ -2,9 +2,10 @@
 
 import json
 import re
+from typing import Any
 
 
-def extract_and_validate_json(response_text: str) -> dict | None:
+def extract_and_validate_json(response_text: str) -> dict[str, Any] | None:
     """
     Extract valid JSON from an LLM response.
 
@@ -21,7 +22,7 @@ def extract_and_validate_json(response_text: str) -> dict | None:
     text = response_text.strip()
 
     # Strategy 1: Markdown code blocks
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
     if match:
         try:
             return json.loads(match.group(1).strip())
@@ -51,16 +52,16 @@ def extract_and_validate_json(response_text: str) -> dict | None:
 
     # Strategy 5: Exhaustive search
     for start in range(len(text)):
-        if text[start] == '{':
+        if text[start] == "{":
             depth = 0
             for end in range(start, len(text)):
-                if text[end] == '{':
+                if text[end] == "{":
                     depth += 1
-                elif text[end] == '}':
+                elif text[end] == "}":
                     depth -= 1
                     if depth == 0:
                         try:
-                            return json.loads(text[start:end + 1])
+                            return json.loads(text[start : end + 1])
                         except json.JSONDecodeError:
                             break
 
@@ -69,23 +70,23 @@ def extract_and_validate_json(response_text: str) -> dict | None:
 
 def _extract_by_braces(text: str) -> str | None:
     """Find the first balanced {} substring."""
-    start = text.find('{')
+    start = text.find("{")
     if start == -1:
         return None
 
     depth = 0
     for i in range(start, len(text)):
-        if text[i] == '{':
+        if text[i] == "{":
             depth += 1
-        elif text[i] == '}':
+        elif text[i] == "}":
             depth -= 1
             if depth == 0:
-                return text[start:i + 1]
+                return text[start : i + 1]
     return None
 
 
 def _fix_common_json_errors(json_str: str) -> str:
     """Fix trailing commas and unquoted property names."""
-    fixed = re.sub(r',(\s*[}\]])', r'\1', json_str)
-    fixed = re.sub(r'(\{|,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', fixed)
+    fixed = re.sub(r",(\s*[}\]])", r"\1", json_str)
+    fixed = re.sub(r"(\{|,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:", r'\1"\2":', fixed)
     return fixed

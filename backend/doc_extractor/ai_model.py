@@ -2,11 +2,12 @@
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from config import OLLAMA_BASE_URL, CLOUD_MAX_OUTPUT_TOKENS
+from config import CLOUD_MAX_OUTPUT_TOKENS, OLLAMA_BASE_URL
 
 # Optional Ollama import
 try:
     from langchain_ollama import ChatOllama
+
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
@@ -25,9 +26,7 @@ def create_ai_model(provider: str, model_name: str):
     """
     if provider == "local":
         if not OLLAMA_AVAILABLE:
-            raise ValueError(
-                "Ollama is not available. Install with: pip install langchain-ollama"
-            )
+            raise ValueError("Ollama is not available. Install with: pip install langchain-ollama")
         return ChatOllama(
             model=model_name,
             base_url=OLLAMA_BASE_URL,
