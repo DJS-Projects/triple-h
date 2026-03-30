@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8002:8002"
+    env_file:
+      - backend/doc_extractor/.env
+    volumes:
+      - pdf-uploads:/app/pdfs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DOC_EXTRACTOR_URL=http://backend:8002
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pdf-uploads:

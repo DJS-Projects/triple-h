@@ -257,8 +257,10 @@ async def upload_pdf(
 
         _, ocr_model_name = OCR_MODEL_MAP.get(selected_ocr_model, (None, "Unknown"))
 
+        filename = file.filename or "upload.pdf"
+
         # Save file
-        filepath = os.path.join(PDFS_DIR, file.filename)
+        filepath = os.path.join(PDFS_DIR, filename)
         with open(filepath, "wb") as f:
             f.write(await file.read())
 
@@ -285,7 +287,7 @@ async def upload_pdf(
             context = context[:MAX_OLLAMA_CONTEXT_CHARS]
 
         # Metadata
-        file_id = hashlib.md5(file.filename.encode()).hexdigest()[:8]
+        file_id = hashlib.md5(filename.encode()).hexdigest()[:8]
         file_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
         file_metadata = {
             "creation_date": datetime.now().isoformat(),
