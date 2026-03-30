@@ -68,6 +68,20 @@ run = "cd frontend && bunx biome lint ."
 description = "Run biome format on frontend"
 run = "cd frontend && bunx biome format --write ."
 
+# --- Docker ---
+
+[tasks.docker]
+description = "Build and run all services with Docker Compose"
+run = "docker compose up --build"
+
+[tasks."docker:build"]
+description = "Build Docker images"
+run = "docker compose build"
+
+[tasks."docker:down"]
+description = "Stop and remove Docker containers"
+run = "docker compose down"
+
 # --- All checks ---
 
 [tasks.check]
