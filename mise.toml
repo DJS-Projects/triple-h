@@ -4,6 +4,9 @@ bun = "latest"
 
 # --- Setup ---
 
+[hooks]
+postinstall = "mise run setup"
+
 [tasks.setup]
 description = "Install all dependencies and hooks"
 depends = ["setup:backend", "setup:frontend", "setup:hooks"]
@@ -72,11 +75,11 @@ run = "cd frontend && bunx biome format --write ."
 
 [tasks.docker]
 description = "Build and run all services with Docker Compose"
-run = "docker compose up --build"
+run = "dotenvx run -- docker compose up --build"
 
 [tasks."docker:build"]
 description = "Build Docker images"
-run = "docker compose build"
+run = "dotenvx run -- docker compose build"
 
 [tasks."docker:down"]
 description = "Stop and remove Docker containers"
