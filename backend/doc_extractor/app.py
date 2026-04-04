@@ -5,9 +5,9 @@ import os
 import time
 from datetime import datetime
 
-import google.generativeai as genai
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from google import genai
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pdf2image import convert_from_bytes
@@ -43,7 +43,7 @@ from table_extraction import (
 )
 
 # Configure Gemini
-genai.configure(api_key=GOOGLE_API_KEY)
+genai_client = genai.Client(api_key=GOOGLE_API_KEY)
 
 app = FastAPI(title="Document Extractor")
 
@@ -213,11 +213,12 @@ def _get_token_usage(answer, provider: str, model_name: str, context: str, respo
     # Fallback: Gemini count_tokens API (cloud only)
     if provider == "cloud":
         try:
-            model_for_counting = genai.GenerativeModel(model_name)
             if not usage["input_tokens"]:
-                usage["input_tokens"] = model_for_counting.count_tokens(context).total_tokens
+                result = genai_client.models.count_tokens(model=model_name, contents=context)
+                usage["input_tokens"] = result.total_tokens
             if not usage["output_tokens"]:
-                usage["output_tokens"] = model_for_counting.count_tokens(response_text).total_tokens
+                result = genai_client.models.count_tokens(model=model_name, contents=response_text)
+                usage["output_tokens"] = result.total_tokens
         except Exception:
             pass
 
