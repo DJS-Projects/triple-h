@@ -1,6 +1,18 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
-# System deps for Tesseract OCR, PDF→image conversion, and OpenCV
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --frozen
+
+COPY backend/doc_extractor/ ./
+
+
+FROM python:3.12-slim AS runner
+
+# System deps for Tesseract OCR, PDF->image conversion, and OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
@@ -9,29 +21,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dotenvx for encrypted .env decryption at runtime
-RUN curl -sfS https://dotenvx.sh | sh
-
-# Install uv for fast dependency resolution
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
 WORKDIR /app
 
-# Copy project definition and install deps
-COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --frozen
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/*.py /app/
 
-# Copy encrypted .env (decrypted at runtime by dotenvx)
-COPY .env .env
-
-# Copy backend code
-COPY backend/doc_extractor/ ./
-
-# Create PDF upload directory
 RUN mkdir -p /app/pdfs
-ENV PDFS_DIR=/app/pdfs
+
+ENV PDFS_DIR=/app/pdfs \
+    PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8002
 
-# dotenvx decrypts .env using DOTENV_PRIVATE_KEY env var, then injects into process
-CMD ["dotenvx", "run", "--", "uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD curl --fail http://localhost:8002/docs || exit 1
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
