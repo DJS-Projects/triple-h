@@ -13,6 +13,9 @@ from text_processing import postprocess_ocr_text
 
 # Disable PaddleOCR model source check
 os.environ["DISABLE_MODEL_SOURCE_CHECK"] = "True"
+# Workaround for PaddlePaddle 3.3 CPU/OneDNN PIR bug
+# https://github.com/PaddlePaddle/Paddle/issues/77340
+os.environ["FLAGS_enable_pir_api"] = "0"  # noqa: SIM112 — PaddlePaddle requires this exact casing
 
 # --- Optional dependency imports ---
 

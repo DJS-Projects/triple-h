@@ -14,7 +14,7 @@ dependencies = [
     "pytesseract>=0.3.10",
     # OCR & computer vision
     "paddleocr>=3.3.0",
-    "paddlepaddle>=3.0.0",
+    "paddlepaddle>=3.0.0,<3.3.0",
     "opencv-contrib-python>=4.5.0",
     "pillow>=9.0.0",
     "paddlex[ocr]>=3.3.0",
