@@ -1,4 +1,5 @@
 import axios from "axios";
+import { DEFAULT_CLOUD_MODEL, DEFAULT_OCR_MODEL } from "./constants";
 import type { UploadOptions, UploadResponse } from "./types";
 
 const client = axios.create({
@@ -12,8 +13,8 @@ export async function uploadPdf(file: File, options: UploadOptions = {}): Promis
 	const form = new FormData();
 	form.append("file", file);
 	form.append("provider", options.provider ?? "cloud");
-	form.append("model", options.model ?? "gemini-2.0-flash");
-	form.append("ocr_model", options.ocrModel ?? "2");
+	form.append("model", options.model ?? DEFAULT_CLOUD_MODEL);
+	form.append("ocr_model", options.ocrModel ?? DEFAULT_OCR_MODEL);
 	form.append("confidence_score", String(options.confidenceScore ?? 90));
 
 	const { data } = await client.post<UploadResponse>("/api/upload", form);

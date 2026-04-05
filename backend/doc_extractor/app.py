@@ -17,6 +17,7 @@ from ai_model import create_ai_model
 from config import (
     ALLOWED_ORIGINS,
     DEFAULT_CONFIDENCE_THRESHOLD,
+    DEFAULT_MODEL,
     DEFAULT_OCR_ENGINE,
     GOOGLE_API_KEY,
     MAX_OLLAMA_CONTEXT_CHARS,
@@ -241,8 +242,8 @@ async def health_check():
 async def upload_pdf(
     file: UploadFile,
     provider: str = Form(default="cloud"),
-    model: str = Form(default="gemini-2.0-flash"),
-    ocr_model: str = Form(default="2"),
+    model: str = Form(default=DEFAULT_MODEL),
+    ocr_model: str = Form(default="1"),
     confidence_score: int = Form(default=90),
 ):
     """Upload and parse a PDF document using OCR + AI."""

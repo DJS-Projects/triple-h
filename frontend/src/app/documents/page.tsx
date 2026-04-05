@@ -9,13 +9,14 @@ import { WeighingBillResult } from "@/components/results/weighing-bill-result";
 import { FileDropzone } from "@/components/upload/file-dropzone";
 import { ModelSelector } from "@/components/upload/model-selector";
 import { uploadPdf } from "@/lib/api";
+import { DEFAULT_CLOUD_MODEL, DEFAULT_OCR_MODEL, DEFAULT_PROVIDER } from "@/lib/constants";
 import type { MixedParsedInfo, OcrModel, Provider, UploadSuccessResponse } from "@/lib/types";
 
 export default function DocumentsPage() {
 	const [file, setFile] = useState<File | null>(null);
-	const [provider, setProvider] = useState<Provider>("cloud");
-	const [model, setModel] = useState("gemini-2.0-flash");
-	const [ocrModel, setOcrModel] = useState<OcrModel>("2");
+	const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
+	const [model, setModel] = useState<string>(DEFAULT_CLOUD_MODEL);
+	const [ocrModel, setOcrModel] = useState<OcrModel>(DEFAULT_OCR_MODEL);
 	const [confidenceScore, setConfidenceScore] = useState(90);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);

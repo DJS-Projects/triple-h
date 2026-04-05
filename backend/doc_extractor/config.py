@@ -13,7 +13,7 @@ PDFS_DIR = os.getenv("PDFS_DIR", "../pdfs")
 os.makedirs(PDFS_DIR, exist_ok=True)
 
 # Default OCR engine: "tesseract", "paddleocr", or "ppstructure"
-DEFAULT_OCR_ENGINE = os.getenv("DEFAULT_OCR_ENGINE", "tesseract")
+DEFAULT_OCR_ENGINE = os.getenv("DEFAULT_OCR_ENGINE", "paddleocr")
 
 # Handwriting confidence threshold (0.0 to 1.0)
 # Values BELOW this are considered handwriting and filtered
@@ -32,7 +32,7 @@ OLLAMA_AVAILABLE_MODELS = [
 
 # AI model defaults
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "cloud")  # "local" or "cloud"
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
 
 # Context limits
 MAX_OLLAMA_CONTEXT_CHARS = int(os.getenv("MAX_OLLAMA_CONTEXT_CHARS", "20000"))
