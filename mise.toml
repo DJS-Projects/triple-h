@@ -85,6 +85,14 @@ run = "dotenvx run -- docker compose build"
 description = "Stop and remove Docker containers"
 run = "docker compose down"
 
+[tasks."docker:reset"]
+description = "Stop all services and wipe volumes"
+run = "docker compose down -v"
+
+[tasks."docker:prune"]
+description = "Remove dangling images, build cache, and stopped containers"
+run = "docker system prune -f && docker builder prune -f"
+
 # --- All checks ---
 
 [tasks.check]

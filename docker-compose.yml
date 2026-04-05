@@ -9,6 +9,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - pdf-uploads:/app/pdfs
+      - paddle-models:/root/.paddlex
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/docs"]
@@ -36,3 +37,4 @@ services:
 
 volumes:
   pdf-uploads:
+  paddle-models:
