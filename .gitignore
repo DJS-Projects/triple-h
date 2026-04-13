@@ -1,20 +1,24 @@
 # Dependencies
 node_modules/
-.next/
-__pycache__/
-*.pyc
-*.pyo
 .venv/
 venv/
+*.pyc
+__pycache__/
 
 # Environment (dotenvx)
-# .env is committed (encrypted), .env.keys is NOT
+# .env files ARE committed (encrypted)
+# .env.keys is NOT (contains private decryption keys)
 .env.keys
+.env.local
 
-# Build output
+# Next.js
+.next/
+out/
+
+# Build
 dist/
 build/
-output/
+coverage/
 
 # IDE
 .vscode/
@@ -24,5 +28,12 @@ output/
 .DS_Store
 Thumbs.db
 
-# PDFs (uploaded files)
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Uploads
 uploads/
