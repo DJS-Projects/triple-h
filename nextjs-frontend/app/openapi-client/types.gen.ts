@@ -4,750 +4,750 @@
  * BearerResponse
  */
 export type BearerResponse = {
-  /**
-   * Access Token
-   */
-  access_token: string;
-  /**
-   * Token Type
-   */
-  token_type: string;
+	/**
+	 * Access Token
+	 */
+	access_token: string;
+	/**
+	 * Token Type
+	 */
+	token_type: string;
 };
 
 /**
  * Body_auth-reset:forgot_password
  */
 export type BodyAuthResetForgotPassword = {
-  /**
-   * Email
-   */
-  email: string;
+	/**
+	 * Email
+	 */
+	email: string;
 };
 
 /**
  * Body_auth-reset:reset_password
  */
 export type BodyAuthResetResetPassword = {
-  /**
-   * Token
-   */
-  token: string;
-  /**
-   * Password
-   */
-  password: string;
+	/**
+	 * Token
+	 */
+	token: string;
+	/**
+	 * Password
+	 */
+	password: string;
 };
 
 /**
  * Body_auth-verify:request-token
  */
 export type BodyAuthVerifyRequestToken = {
-  /**
-   * Email
-   */
-  email: string;
+	/**
+	 * Email
+	 */
+	email: string;
 };
 
 /**
  * Body_auth-verify:verify
  */
 export type BodyAuthVerifyVerify = {
-  /**
-   * Token
-   */
-  token: string;
+	/**
+	 * Token
+	 */
+	token: string;
 };
 
 /**
  * ErrorModel
  */
 export type ErrorModel = {
-  /**
-   * Detail
-   */
-  detail:
-    | string
-    | {
-        [key: string]: string;
-      };
+	/**
+	 * Detail
+	 */
+	detail:
+		| string
+		| {
+				[key: string]: string;
+		  };
 };
 
 /**
  * HTTPValidationError
  */
 export type HttpValidationError = {
-  /**
-   * Detail
-   */
-  detail?: Array<ValidationError>;
+	/**
+	 * Detail
+	 */
+	detail?: Array<ValidationError>;
 };
 
 /**
  * ItemCreate
  */
 export type ItemCreate = {
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Description
-   */
-  description?: string | null;
-  /**
-   * Quantity
-   */
-  quantity?: number | null;
+	/**
+	 * Name
+	 */
+	name: string;
+	/**
+	 * Description
+	 */
+	description?: string | null;
+	/**
+	 * Quantity
+	 */
+	quantity?: number | null;
 };
 
 /**
  * ItemRead
  */
 export type ItemRead = {
-  /**
-   * Name
-   */
-  name: string;
-  /**
-   * Description
-   */
-  description?: string | null;
-  /**
-   * Quantity
-   */
-  quantity?: number | null;
-  /**
-   * Id
-   */
-  id: string;
-  /**
-   * User Id
-   */
-  user_id: string;
+	/**
+	 * Name
+	 */
+	name: string;
+	/**
+	 * Description
+	 */
+	description?: string | null;
+	/**
+	 * Quantity
+	 */
+	quantity?: number | null;
+	/**
+	 * Id
+	 */
+	id: string;
+	/**
+	 * User Id
+	 */
+	user_id: string;
 };
 
 /**
  * Page[ItemRead]
  */
 export type PageItemRead = {
-  /**
-   * Items
-   */
-  items: Array<ItemRead>;
-  /**
-   * Total
-   */
-  total?: number | null;
-  /**
-   * Page
-   */
-  page: number | null;
-  /**
-   * Size
-   */
-  size: number | null;
-  /**
-   * Pages
-   */
-  pages?: number | null;
+	/**
+	 * Items
+	 */
+	items: Array<ItemRead>;
+	/**
+	 * Total
+	 */
+	total?: number | null;
+	/**
+	 * Page
+	 */
+	page: number | null;
+	/**
+	 * Size
+	 */
+	size: number | null;
+	/**
+	 * Pages
+	 */
+	pages?: number | null;
 };
 
 /**
  * UserCreate
  */
 export type UserCreate = {
-  /**
-   * Email
-   */
-  email: string;
-  /**
-   * Password
-   */
-  password: string;
-  /**
-   * Is Active
-   */
-  is_active?: boolean | null;
-  /**
-   * Is Superuser
-   */
-  is_superuser?: boolean | null;
-  /**
-   * Is Verified
-   */
-  is_verified?: boolean | null;
+	/**
+	 * Email
+	 */
+	email: string;
+	/**
+	 * Password
+	 */
+	password: string;
+	/**
+	 * Is Active
+	 */
+	is_active?: boolean | null;
+	/**
+	 * Is Superuser
+	 */
+	is_superuser?: boolean | null;
+	/**
+	 * Is Verified
+	 */
+	is_verified?: boolean | null;
 };
 
 /**
  * UserRead
  */
 export type UserRead = {
-  /**
-   * Id
-   */
-  id: string;
-  /**
-   * Email
-   */
-  email: string;
-  /**
-   * Is Active
-   */
-  is_active?: boolean;
-  /**
-   * Is Superuser
-   */
-  is_superuser?: boolean;
-  /**
-   * Is Verified
-   */
-  is_verified?: boolean;
+	/**
+	 * Id
+	 */
+	id: string;
+	/**
+	 * Email
+	 */
+	email: string;
+	/**
+	 * Is Active
+	 */
+	is_active?: boolean;
+	/**
+	 * Is Superuser
+	 */
+	is_superuser?: boolean;
+	/**
+	 * Is Verified
+	 */
+	is_verified?: boolean;
 };
 
 /**
  * UserUpdate
  */
 export type UserUpdate = {
-  /**
-   * Password
-   */
-  password?: string | null;
-  /**
-   * Email
-   */
-  email?: string | null;
-  /**
-   * Is Active
-   */
-  is_active?: boolean | null;
-  /**
-   * Is Superuser
-   */
-  is_superuser?: boolean | null;
-  /**
-   * Is Verified
-   */
-  is_verified?: boolean | null;
+	/**
+	 * Password
+	 */
+	password?: string | null;
+	/**
+	 * Email
+	 */
+	email?: string | null;
+	/**
+	 * Is Active
+	 */
+	is_active?: boolean | null;
+	/**
+	 * Is Superuser
+	 */
+	is_superuser?: boolean | null;
+	/**
+	 * Is Verified
+	 */
+	is_verified?: boolean | null;
 };
 
 /**
  * ValidationError
  */
 export type ValidationError = {
-  /**
-   * Location
-   */
-  loc: Array<string | number>;
-  /**
-   * Message
-   */
-  msg: string;
-  /**
-   * Error Type
-   */
-  type: string;
+	/**
+	 * Location
+	 */
+	loc: Array<string | number>;
+	/**
+	 * Message
+	 */
+	msg: string;
+	/**
+	 * Error Type
+	 */
+	type: string;
 };
 
 /**
  * Body_auth-auth:jwt.login
  */
 export type Login = {
-  /**
-   * Grant Type
-   */
-  grant_type?: string | null;
-  /**
-   * Username
-   */
-  username: string;
-  /**
-   * Password
-   */
-  password: string;
-  /**
-   * Scope
-   */
-  scope?: string;
-  /**
-   * Client Id
-   */
-  client_id?: string | null;
-  /**
-   * Client Secret
-   */
-  client_secret?: string | null;
+	/**
+	 * Grant Type
+	 */
+	grant_type?: string | null;
+	/**
+	 * Username
+	 */
+	username: string;
+	/**
+	 * Password
+	 */
+	password: string;
+	/**
+	 * Scope
+	 */
+	scope?: string;
+	/**
+	 * Client Id
+	 */
+	client_id?: string | null;
+	/**
+	 * Client Secret
+	 */
+	client_secret?: string | null;
 };
 
 export type AuthJwtLoginData = {
-  body: Login;
-  path?: never;
-  query?: never;
-  url: "/auth/jwt/login";
+	body: Login;
+	path?: never;
+	query?: never;
+	url: "/auth/jwt/login";
 };
 
 export type AuthJwtLoginErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type AuthJwtLoginError = AuthJwtLoginErrors[keyof AuthJwtLoginErrors];
 
 export type AuthJwtLoginResponses = {
-  /**
-   * Successful Response
-   */
-  200: BearerResponse;
+	/**
+	 * Successful Response
+	 */
+	200: BearerResponse;
 };
 
 export type AuthJwtLoginResponse =
-  AuthJwtLoginResponses[keyof AuthJwtLoginResponses];
+	AuthJwtLoginResponses[keyof AuthJwtLoginResponses];
 
 export type AuthJwtLogoutData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: "/auth/jwt/logout";
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/auth/jwt/logout";
 };
 
 export type AuthJwtLogoutErrors = {
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
 };
 
 export type AuthJwtLogoutResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
 };
 
 export type RegisterRegisterData = {
-  body: UserCreate;
-  path?: never;
-  query?: never;
-  url: "/auth/register";
+	body: UserCreate;
+	path?: never;
+	query?: never;
+	url: "/auth/register";
 };
 
 export type RegisterRegisterErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type RegisterRegisterError =
-  RegisterRegisterErrors[keyof RegisterRegisterErrors];
+	RegisterRegisterErrors[keyof RegisterRegisterErrors];
 
 export type RegisterRegisterResponses = {
-  /**
-   * Successful Response
-   */
-  201: UserRead;
+	/**
+	 * Successful Response
+	 */
+	201: UserRead;
 };
 
 export type RegisterRegisterResponse =
-  RegisterRegisterResponses[keyof RegisterRegisterResponses];
+	RegisterRegisterResponses[keyof RegisterRegisterResponses];
 
 export type ResetForgotPasswordData = {
-  body: BodyAuthResetForgotPassword;
-  path?: never;
-  query?: never;
-  url: "/auth/forgot-password";
+	body: BodyAuthResetForgotPassword;
+	path?: never;
+	query?: never;
+	url: "/auth/forgot-password";
 };
 
 export type ResetForgotPasswordErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type ResetForgotPasswordError =
-  ResetForgotPasswordErrors[keyof ResetForgotPasswordErrors];
+	ResetForgotPasswordErrors[keyof ResetForgotPasswordErrors];
 
 export type ResetForgotPasswordResponses = {
-  /**
-   * Successful Response
-   */
-  202: unknown;
+	/**
+	 * Successful Response
+	 */
+	202: unknown;
 };
 
 export type ResetResetPasswordData = {
-  body: BodyAuthResetResetPassword;
-  path?: never;
-  query?: never;
-  url: "/auth/reset-password";
+	body: BodyAuthResetResetPassword;
+	path?: never;
+	query?: never;
+	url: "/auth/reset-password";
 };
 
 export type ResetResetPasswordErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type ResetResetPasswordError =
-  ResetResetPasswordErrors[keyof ResetResetPasswordErrors];
+	ResetResetPasswordErrors[keyof ResetResetPasswordErrors];
 
 export type ResetResetPasswordResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
 };
 
 export type VerifyRequestTokenData = {
-  body: BodyAuthVerifyRequestToken;
-  path?: never;
-  query?: never;
-  url: "/auth/request-verify-token";
+	body: BodyAuthVerifyRequestToken;
+	path?: never;
+	query?: never;
+	url: "/auth/request-verify-token";
 };
 
 export type VerifyRequestTokenErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type VerifyRequestTokenError =
-  VerifyRequestTokenErrors[keyof VerifyRequestTokenErrors];
+	VerifyRequestTokenErrors[keyof VerifyRequestTokenErrors];
 
 export type VerifyRequestTokenResponses = {
-  /**
-   * Successful Response
-   */
-  202: unknown;
+	/**
+	 * Successful Response
+	 */
+	202: unknown;
 };
 
 export type VerifyVerifyData = {
-  body: BodyAuthVerifyVerify;
-  path?: never;
-  query?: never;
-  url: "/auth/verify";
+	body: BodyAuthVerifyVerify;
+	path?: never;
+	query?: never;
+	url: "/auth/verify";
 };
 
 export type VerifyVerifyErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type VerifyVerifyError = VerifyVerifyErrors[keyof VerifyVerifyErrors];
 
 export type VerifyVerifyResponses = {
-  /**
-   * Successful Response
-   */
-  200: UserRead;
+	/**
+	 * Successful Response
+	 */
+	200: UserRead;
 };
 
 export type VerifyVerifyResponse =
-  VerifyVerifyResponses[keyof VerifyVerifyResponses];
+	VerifyVerifyResponses[keyof VerifyVerifyResponses];
 
 export type UsersCurrentUserData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: "/users/me";
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/users/me";
 };
 
 export type UsersCurrentUserErrors = {
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
 };
 
 export type UsersCurrentUserResponses = {
-  /**
-   * Successful Response
-   */
-  200: UserRead;
+	/**
+	 * Successful Response
+	 */
+	200: UserRead;
 };
 
 export type UsersCurrentUserResponse =
-  UsersCurrentUserResponses[keyof UsersCurrentUserResponses];
+	UsersCurrentUserResponses[keyof UsersCurrentUserResponses];
 
 export type UsersPatchCurrentUserData = {
-  body: UserUpdate;
-  path?: never;
-  query?: never;
-  url: "/users/me";
+	body: UserUpdate;
+	path?: never;
+	query?: never;
+	url: "/users/me";
 };
 
 export type UsersPatchCurrentUserErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type UsersPatchCurrentUserError =
-  UsersPatchCurrentUserErrors[keyof UsersPatchCurrentUserErrors];
+	UsersPatchCurrentUserErrors[keyof UsersPatchCurrentUserErrors];
 
 export type UsersPatchCurrentUserResponses = {
-  /**
-   * Successful Response
-   */
-  200: UserRead;
+	/**
+	 * Successful Response
+	 */
+	200: UserRead;
 };
 
 export type UsersPatchCurrentUserResponse =
-  UsersPatchCurrentUserResponses[keyof UsersPatchCurrentUserResponses];
+	UsersPatchCurrentUserResponses[keyof UsersPatchCurrentUserResponses];
 
 export type UsersDeleteUserData = {
-  body?: never;
-  path: {
-    /**
-     * Id
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/users/{id}";
+	body?: never;
+	path: {
+		/**
+		 * Id
+		 */
+		id: string;
+	};
+	query?: never;
+	url: "/users/{id}";
 };
 
 export type UsersDeleteUserErrors = {
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
-  /**
-   * Not a superuser.
-   */
-  403: unknown;
-  /**
-   * The user does not exist.
-   */
-  404: unknown;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
+	/**
+	 * Not a superuser.
+	 */
+	403: unknown;
+	/**
+	 * The user does not exist.
+	 */
+	404: unknown;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type UsersDeleteUserError =
-  UsersDeleteUserErrors[keyof UsersDeleteUserErrors];
+	UsersDeleteUserErrors[keyof UsersDeleteUserErrors];
 
 export type UsersDeleteUserResponses = {
-  /**
-   * Successful Response
-   */
-  204: void;
+	/**
+	 * Successful Response
+	 */
+	204: void;
 };
 
 export type UsersDeleteUserResponse =
-  UsersDeleteUserResponses[keyof UsersDeleteUserResponses];
+	UsersDeleteUserResponses[keyof UsersDeleteUserResponses];
 
 export type UsersUserData = {
-  body?: never;
-  path: {
-    /**
-     * Id
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/users/{id}";
+	body?: never;
+	path: {
+		/**
+		 * Id
+		 */
+		id: string;
+	};
+	query?: never;
+	url: "/users/{id}";
 };
 
 export type UsersUserErrors = {
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
-  /**
-   * Not a superuser.
-   */
-  403: unknown;
-  /**
-   * The user does not exist.
-   */
-  404: unknown;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
+	/**
+	 * Not a superuser.
+	 */
+	403: unknown;
+	/**
+	 * The user does not exist.
+	 */
+	404: unknown;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type UsersUserError = UsersUserErrors[keyof UsersUserErrors];
 
 export type UsersUserResponses = {
-  /**
-   * Successful Response
-   */
-  200: UserRead;
+	/**
+	 * Successful Response
+	 */
+	200: UserRead;
 };
 
 export type UsersUserResponse = UsersUserResponses[keyof UsersUserResponses];
 
 export type UsersPatchUserData = {
-  body: UserUpdate;
-  path: {
-    /**
-     * Id
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/users/{id}";
+	body: UserUpdate;
+	path: {
+		/**
+		 * Id
+		 */
+		id: string;
+	};
+	query?: never;
+	url: "/users/{id}";
 };
 
 export type UsersPatchUserErrors = {
-  /**
-   * Bad Request
-   */
-  400: ErrorModel;
-  /**
-   * Missing token or inactive user.
-   */
-  401: unknown;
-  /**
-   * Not a superuser.
-   */
-  403: unknown;
-  /**
-   * The user does not exist.
-   */
-  404: unknown;
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Bad Request
+	 */
+	400: ErrorModel;
+	/**
+	 * Missing token or inactive user.
+	 */
+	401: unknown;
+	/**
+	 * Not a superuser.
+	 */
+	403: unknown;
+	/**
+	 * The user does not exist.
+	 */
+	404: unknown;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type UsersPatchUserError =
-  UsersPatchUserErrors[keyof UsersPatchUserErrors];
+	UsersPatchUserErrors[keyof UsersPatchUserErrors];
 
 export type UsersPatchUserResponses = {
-  /**
-   * Successful Response
-   */
-  200: UserRead;
+	/**
+	 * Successful Response
+	 */
+	200: UserRead;
 };
 
 export type UsersPatchUserResponse =
-  UsersPatchUserResponses[keyof UsersPatchUserResponses];
+	UsersPatchUserResponses[keyof UsersPatchUserResponses];
 
 export type ReadItemData = {
-  body?: never;
-  path?: never;
-  query?: {
-    /**
-     * Page
-     * Page number
-     */
-    page?: number;
-    /**
-     * Size
-     * Page size
-     */
-    size?: number;
-  };
-  url: "/items/";
+	body?: never;
+	path?: never;
+	query?: {
+		/**
+		 * Page
+		 * Page number
+		 */
+		page?: number;
+		/**
+		 * Size
+		 * Page size
+		 */
+		size?: number;
+	};
+	url: "/items/";
 };
 
 export type ReadItemErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type ReadItemError = ReadItemErrors[keyof ReadItemErrors];
 
 export type ReadItemResponses = {
-  /**
-   * Successful Response
-   */
-  200: PageItemRead;
+	/**
+	 * Successful Response
+	 */
+	200: PageItemRead;
 };
 
 export type ReadItemResponse = ReadItemResponses[keyof ReadItemResponses];
 
 export type CreateItemData = {
-  body: ItemCreate;
-  path?: never;
-  query?: never;
-  url: "/items/";
+	body: ItemCreate;
+	path?: never;
+	query?: never;
+	url: "/items/";
 };
 
 export type CreateItemErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type CreateItemError = CreateItemErrors[keyof CreateItemErrors];
 
 export type CreateItemResponses = {
-  /**
-   * Successful Response
-   */
-  200: ItemRead;
+	/**
+	 * Successful Response
+	 */
+	200: ItemRead;
 };
 
 export type CreateItemResponse = CreateItemResponses[keyof CreateItemResponses];
 
 export type DeleteItemData = {
-  body?: never;
-  path: {
-    /**
-     * Item Id
-     */
-    item_id: string;
-  };
-  query?: never;
-  url: "/items/{item_id}";
+	body?: never;
+	path: {
+		/**
+		 * Item Id
+		 */
+		item_id: string;
+	};
+	query?: never;
+	url: "/items/{item_id}";
 };
 
 export type DeleteItemErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
 };
 
 export type DeleteItemError = DeleteItemErrors[keyof DeleteItemErrors];
 
 export type DeleteItemResponses = {
-  /**
-   * Successful Response
-   */
-  200: unknown;
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
 };
 
 export type ClientOptions = {
-  baseURL: `${string}://${string}` | (string & {});
+	baseURL: `${string}://${string}` | (string & {});
 };

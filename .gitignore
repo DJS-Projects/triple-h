@@ -25,4 +25,4 @@ output/
 Thumbs.db
 
 # PDFs (uploaded files)
-backend/doc_extractor/pdfs/
+uploads/

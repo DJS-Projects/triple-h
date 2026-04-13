@@ -26,31 +26,31 @@ run = "pre-commit install"
 
 [tasks."be:dev"]
 description = "Run FastAPI backend"
-run = "cd fastapi_backend && dotenvx run -- uv run uvicorn app.main:app --reload --port 8000"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run uvicorn app.main:app --reload --port 8000"
 
 [tasks."fe:dev"]
 description = "Run Next.js frontend"
-run = "cd nextjs-frontend && bun run dev"
+run = "cd nextjs-frontend && dotenvx run -fk ../.env.keys -- bun run dev"
 
 # ── Backend Testing ─────────────────────────────────────────────────────────
 
 [tasks."be:test"]
 description = "Run backend unit tests"
-run = "cd fastapi_backend && dotenvx run -- uv run pytest tests/ -v"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests/ -v"
 
 [tasks."be:test:eval"]
 description = "Run E2E eval tests (requires API key)"
-run = "cd fastapi_backend && dotenvx run -- uv run pytest tests_eval/ -m eval -v"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests_eval/ -m eval -v"
 
 [tasks."be:test:all"]
 description = "Run all backend tests"
-run = "cd fastapi_backend && dotenvx run -- uv run pytest -v"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest -v"
 
 # ── Frontend Testing ────────────────────────────────────────────────────────
 
 [tasks."fe:test"]
 description = "Run frontend tests"
-run = "cd nextjs-frontend && bun run test"
+run = "cd nextjs-frontend && dotenvx run -fk ../.env.keys -- bun test"
 
 # ── Quality ─────────────────────────────────────────────────────────────────
 
@@ -71,35 +71,43 @@ description = "Run all backend checks (lint + typecheck + format)"
 depends = ["be:lint", "be:typecheck"]
 run = "cd fastapi_backend && uv run ruff format --check ."
 
+[tasks."fe:lint"]
+description = "Run frontend linter"
+run = "cd nextjs-frontend && bunx biome check ."
+
+[tasks."fe:format"]
+description = "Format frontend code"
+run = "cd nextjs-frontend && bunx biome check --write ."
+
 # ── Env ─────────────────────────────────────────────────────────────────────
 
 [tasks."env:encrypt"]
-description = "Encrypt .env file (safe to commit after this)"
-run = "cd fastapi_backend && dotenvx encrypt"
+description = "Encrypt all .env files"
+run = "dotenvx encrypt -fk .env.keys -f fastapi_backend/.env && dotenvx encrypt -fk .env.keys -f nextjs-frontend/.env"
 
 [tasks."env:decrypt"]
-description = "Decrypt .env file (requires .env.keys or DOTENV_PRIVATE_KEY)"
-run = "cd fastapi_backend && dotenvx decrypt"
+description = "Decrypt all .env files"
+run = "dotenvx decrypt -fk .env.keys -f fastapi_backend/.env && dotenvx decrypt -fk .env.keys -f nextjs-frontend/.env"
 
 # ── Database ────────────────────────────────────────────────────────────────
 
 [tasks."be:db:migrate"]
 description = "Run alembic migrations"
-run = "cd fastapi_backend && dotenvx run -- uv run alembic upgrade head"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run alembic upgrade head"
 
 [tasks."be:db:revision"]
 description = "Create new alembic migration"
-run = "cd fastapi_backend && dotenvx run -- uv run alembic revision --autogenerate"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run alembic revision --autogenerate"
 
 # ── Docker ──────────────────────────────────────────────────────────────────
 
 [tasks."docker:up"]
 description = "Start all services via Docker Compose"
-run = "dotenvx run -f fastapi_backend/.env -- docker compose up --build -d"
+run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -- docker compose up --build -d"
 
 [tasks."docker:watch"]
 description = "Start all services with file watch (foreground)"
-run = "dotenvx run -f fastapi_backend/.env -- docker compose up --build --watch"
+run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -- docker compose up --build --watch"
 
 [tasks."docker:down"]
 description = "Stop all services"
