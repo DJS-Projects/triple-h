@@ -1,40 +1,74 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    ports:
-      - "8002:8002"
+      context: fastapi_backend
     environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENAPI_OUTPUT_FILE=./shared-data/openapi.json
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/mydatabase
+      - TEST_DATABASE_URL=postgresql+asyncpg://postgres:password@db:5433/testdatabase
+      - MAIL_SERVER=mailhog
+    ports:
+      - "8000:8000"
+    networks:
+      - my_network
     volumes:
-      - pdf-uploads:/app/pdfs
-      - paddle-models:/root/.paddlex
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/docs"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
+      - ./fastapi_backend:/app
+      - fastapi-venv:/app/.venv
+      - ./local-shared-data:/app/shared-data
+    depends_on:
+      - db
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    networks:
+      - my_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  db_test:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: testdatabase
+    ports:
+      - "5433:5432"
+    networks:
+      - my_network
+    restart: always
   frontend:
     build:
-      context: frontend
-      dockerfile: Dockerfile
+      context: ./nextjs-frontend
+    user: node
     ports:
       - "3000:3000"
+    networks:
+      - my_network
     environment:
-      - DOC_EXTRACTOR_URL=http://backend:8002
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
+      NODE_ENV: development
+      API_BASE_URL: http://backend:8000
+      OPENAPI_OUTPUT_FILE: ./shared-data/openapi.json
+    volumes:
+      - ./nextjs-frontend:/app
+      - nextjs-node-modules:/app/node_modules
+      - ./local-shared-data:/app/shared-data
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI
+    networks:
+      - my_network
 
 volumes:
-  pdf-uploads:
-  paddle-models:
+  postgres_data:
+  nextjs-node-modules:
+  fastapi-venv:
+
+networks:
+  my_network:
+    driver: bridge

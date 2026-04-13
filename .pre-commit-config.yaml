@@ -7,18 +7,9 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
-        args: ['--maxkb=1000']
+        args: ['--maxkb=2000']
       - id: check-merge-conflict
       - id: detect-private-key
-
-  - repo: local
-    hooks:
-      - id: check-env-encrypted
-        name: check .env values are encrypted
-        entry: python scripts/check_env_encrypted.py
-        language: system
-        files: ^\.env
-        types: [file]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.4
@@ -35,4 +26,4 @@ repos:
       - id: mypy
         additional_dependencies: []
         args: [--ignore-missing-imports]
-        files: ^backend/
+        files: ^fastapi_backend/

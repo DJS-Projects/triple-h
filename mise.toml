@@ -1,101 +1,114 @@
 [tools]
 python = "3.12"
 bun = "latest"
+"npm:@dotenvx/dotenvx" = "latest"
+"pipx:pre-commit" = "latest"
 
-# --- Setup ---
-
-[hooks]
-postinstall = "mise run setup"
+# ── Setup ───────────────────────────────────────────────────────────────────
 
 [tasks.setup]
-description = "Install all dependencies and hooks"
-depends = ["setup:backend", "setup:frontend", "setup:hooks"]
+description = "Install all dependencies"
+depends = ["setup:be", "setup:fe"]
 
-[tasks."setup:backend"]
-description = "Install Python dependencies"
-run = "uv sync"
+[tasks."setup:be"]
+description = "Install backend dependencies"
+run = "cd fastapi_backend && uv sync"
 
-[tasks."setup:frontend"]
+[tasks."setup:fe"]
 description = "Install frontend dependencies"
-run = "cd frontend && bun install"
+run = "cd nextjs-frontend && bun install"
 
 [tasks."setup:hooks"]
-description = "Install pre-commit hooks"
-run = "uv run pre-commit install"
+description = "Install pre-commit git hooks"
+run = "pre-commit install"
 
-# --- Env ---
+# ── Dev ─────────────────────────────────────────────────────────────────────
 
-[tasks.encrypt]
-description = "Encrypt .env files with dotenvx"
-run = "dotenvx encrypt"
+[tasks."be:dev"]
+description = "Run FastAPI backend"
+run = "cd fastapi_backend && dotenvx run -- uv run uvicorn app.main:app --reload --port 8000"
 
-[tasks.decrypt]
-description = "Decrypt .env files with dotenvx"
-run = "dotenvx decrypt"
-
-# --- Dev ---
-
-[tasks.dev-backend]
-description = "Run doc_extractor backend"
-run = "cd backend/doc_extractor && dotenvx run -f ../../.env -- uv run uvicorn app:app --reload --port 8002"
-
-[tasks.dev-frontend]
+[tasks."fe:dev"]
 description = "Run Next.js frontend"
-run = "dotenvx run -- bun run --cwd frontend dev"
+run = "cd nextjs-frontend && bun run dev"
 
-# --- Backend checks (Python) ---
+# ── Backend Testing ─────────────────────────────────────────────────────────
 
-[tasks.lint]
-description = "Run ruff linter on backend"
-run = "uv run ruff check backend/"
+[tasks."be:test"]
+description = "Run backend unit tests"
+run = "cd fastapi_backend && dotenvx run -- uv run pytest tests/ -v"
 
-[tasks.format]
-description = "Run ruff formatter on backend"
-run = "uv run ruff format backend/"
+[tasks."be:test:eval"]
+description = "Run E2E eval tests (requires API key)"
+run = "cd fastapi_backend && dotenvx run -- uv run pytest tests_eval/ -m eval -v"
 
-[tasks.typecheck]
-description = "Run mypy on backend"
-run = "uv run mypy backend/doc_extractor/"
+[tasks."be:test:all"]
+description = "Run all backend tests"
+run = "cd fastapi_backend && dotenvx run -- uv run pytest -v"
 
-# --- Frontend checks (Biome) ---
+# ── Frontend Testing ────────────────────────────────────────────────────────
 
-[tasks."fe:check"]
-description = "Run biome check on frontend"
-run = "cd frontend && bunx biome check ."
+[tasks."fe:test"]
+description = "Run frontend tests"
+run = "cd nextjs-frontend && bun run test"
 
-[tasks."fe:lint"]
-description = "Run biome lint on frontend"
-run = "cd frontend && bunx biome lint ."
+# ── Quality ─────────────────────────────────────────────────────────────────
 
-[tasks."fe:format"]
-description = "Run biome format on frontend"
-run = "cd frontend && bunx biome format --write ."
+[tasks."be:lint"]
+description = "Run backend linter"
+run = "cd fastapi_backend && uv run ruff check ."
 
-# --- Docker ---
+[tasks."be:format"]
+description = "Format backend code"
+run = "cd fastapi_backend && uv run ruff format ."
 
-[tasks.docker]
-description = "Build and run all services with Docker Compose"
-run = "dotenvx run -- docker compose up --build"
+[tasks."be:typecheck"]
+description = "Run backend type checker"
+run = "cd fastapi_backend && uv run mypy app/"
 
-[tasks."docker:build"]
-description = "Build Docker images"
-run = "dotenvx run -- docker compose build"
+[tasks."be:check"]
+description = "Run all backend checks (lint + typecheck + format)"
+depends = ["be:lint", "be:typecheck"]
+run = "cd fastapi_backend && uv run ruff format --check ."
+
+# ── Env ─────────────────────────────────────────────────────────────────────
+
+[tasks."env:encrypt"]
+description = "Encrypt .env file (safe to commit after this)"
+run = "cd fastapi_backend && dotenvx encrypt"
+
+[tasks."env:decrypt"]
+description = "Decrypt .env file (requires .env.keys or DOTENV_PRIVATE_KEY)"
+run = "cd fastapi_backend && dotenvx decrypt"
+
+# ── Database ────────────────────────────────────────────────────────────────
+
+[tasks."be:db:migrate"]
+description = "Run alembic migrations"
+run = "cd fastapi_backend && dotenvx run -- uv run alembic upgrade head"
+
+[tasks."be:db:revision"]
+description = "Create new alembic migration"
+run = "cd fastapi_backend && dotenvx run -- uv run alembic revision --autogenerate"
+
+# ── Docker ──────────────────────────────────────────────────────────────────
+
+[tasks."docker:up"]
+description = "Start all services via Docker Compose"
+run = "dotenvx run -f fastapi_backend/.env -- docker compose up --build -d"
+
+[tasks."docker:watch"]
+description = "Start all services with file watch (foreground)"
+run = "dotenvx run -f fastapi_backend/.env -- docker compose up --build --watch"
 
 [tasks."docker:down"]
-description = "Stop and remove Docker containers"
+description = "Stop all services"
 run = "docker compose down"
 
 [tasks."docker:reset"]
 description = "Stop all services and wipe volumes"
 run = "docker compose down -v"
 
-[tasks."docker:prune"]
-description = "Remove dangling images, build cache, and stopped containers"
-run = "docker system prune -f && docker builder prune -f"
-
-# --- All checks ---
-
-[tasks.check]
-description = "Run all checks (backend + frontend)"
-depends = ["lint", "typecheck", "fe:check"]
-run = "uv run ruff format --check backend/"
+[tasks."docker:logs"]
+description = "Tail Docker Compose logs"
+run = "docker compose logs -f"

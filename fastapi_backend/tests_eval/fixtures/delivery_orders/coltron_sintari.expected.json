@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "source_pdf": "coltron_sintari.pdf",
+    "doc_type": "delivery_order",
+    "status": "HUMAN_REVIEWED",
+    "notes": "Sintari Sdn Bhd DO to GBI Mesh & Bar / Coltron Construction"
+  },
+  "D/O issuer name": "Sintari Sdn Bhd",
+  "sold to": "GBI Mesh & Bar Trading Sdn. Bhd.",
+  "sold to (address)": "8, Lorong Bakap Indah 10, Taman Bakap Indah, 14200 Sungai Bakap, Pulau Pinang Malaysia",
+  "delivered to": "Coltron Construction S/B-BCM",
+  "delivered to (address)": "LOT 224 KWS Perindustrian Bukit Kayu Hitam, 06050 Bukit Kayu Hitam, Kedah",
+  "D/O number": ["DO-61581"],
+  "P/O number": ["PO2511-102"],
+  "Vehicle number": ["MDX7849"],
+  "date": ["2025-11-18"],
+  "items": [
+    {
+      "description": "HTD BARS 10MM X 12M (138PCS X 2 BDLS)",
+      "quantity": "2.0440 MT",
+      "weight_mt": "2.0440"
+    }
+  ],
+  "total_quantity": "2.0440",
+  "total_weight_mt": "2.0440"
+}

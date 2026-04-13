@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "source_pdf": "arfi_8038.pdf",
+    "doc_type": "invoice",
+    "status": "HUMAN_REVIEWED",
+    "notes": "Heng Hup Metal Sdn Bhd invoice to Lian Gang Logistics Sdn Bhd. Transport charges. Page 1 of 8."
+  },
+  "invoice_number": "ARFI-000008038",
+  "invoice_date": "2025-11-28",
+  "terms": "60 DAYS",
+  "bill_to": "Lian Gang Logistics Sdn Bhd",
+  "bill_to_tin": "C26547543000",
+  "bill_to_address": "Kawasan Industri Malaysia China Kuantan (MCKIP), Jalan Gebeng By Pass, Darul Makmur 26080 Kuantan, Pahang, Malaysia",
+  "from_company": "Heng Hup Metal Sdn Bhd",
+  "from_tin": "C20858454040",
+  "items": [
+    {
+      "description": "TRANSPORT CHARGES-KUANTAN TO SELANGOR, DO NO: 4243-281 (15.11.2025), CONTRACT NO: LXSKJ2025002-11, VEHICLE NO: VHU1805",
+      "quantity": "22720.00",
+      "unit_price": "0.056000",
+      "amount": "1272.32"
+    },
+    {
+      "description": "TRANSPORT CHARGES-KUANTAN TO SENAI, JOHOR, DO NO: 4242-152 (6.11.2025), CONTRACT NO: XXSKJ2025001-11, VEHICLE NO: JST7537",
+      "quantity": "30840.00",
+      "unit_price": "0.059000",
+      "amount": "1819.56"
+    },
+    {
+      "description": "TRANSPORT CHARGES-KUANTAN TO SENAI, JOHOR, DO NO: 4253-217 (8.11.2025), CONTRACT NO: XXS2025130, VEHICLE NO: JLS7737",
+      "quantity": "30920.00",
+      "unit_price": "0.059000",
+      "amount": "1824.28"
+    },
+    {
+      "description": "TRANSPORT CHARGES-KUANTAN TO JOHOR BAHRU, JOHOR, DO NO: 4263-21 (8.11.2025), CONTRACT NO: XXS2025132, VEHICLE NO: JST7537",
+      "quantity": "30780.00",
+      "unit_price": "0.059000",
+      "amount": "1816.02"
+    },
+    {
+      "description": "TRANSPORT CHARGES-KUANTAN TO SUNGAI PETANI, KEDAH, DO NO: 4237-126 (11.11.2025), CONTRACT NO: XXS2025127, VEHICLE NO: JMM9066",
+      "quantity": "30820.00",
+      "unit_price": "0.086000",
+      "amount": "2650.52"
+    }
+  ]
+}

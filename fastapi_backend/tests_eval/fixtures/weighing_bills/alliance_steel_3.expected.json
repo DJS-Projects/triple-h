@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "source_pdf": "alliance_steel_3.pdf",
+    "doc_type": "weighing_bill",
+    "status": "HUMAN_REVIEWED",
+    "notes": "Alliance Steel weighing bill - DS Steel receiver, PRJ7792 vehicle, Jan 2026"
+  },
+  "weighing_no": "202601060874",
+  "contract_no": "LXSKJ2026002-1",
+  "vehicle_no": "PRJ7792",
+  "material_name": "STEEL BAR",
+  "gross_weight": "54.88 t",
+  "tare_weight": "29.36 t",
+  "net_weight": "25.52 t",
+  "off_weight": "0.00 t",
+  "actual_weight": "25.52 t",
+  "gross_time": "2026-01-06T22:29:49",
+  "tare_time": "2026-01-06T16:10:18",
+  "deliver": "Alliance Steel",
+  "receiver": "DS Steel Sdn. Bhd.",
+  "fleet_name": "Lian Gang Logistics Sdn Bhd"
+}

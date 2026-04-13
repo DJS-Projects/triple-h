@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "source_pdf": "klass_metal.pdf",
+    "doc_type": "delivery_order",
+    "status": "HUMAN_REVIEWED",
+    "notes": "Klaas Metal Sdn Bhd DO to Eng Soon Hardware / Hillhome Builder"
+  },
+  "D/O issuer name": "Klaas Metal Sdn. Bhd.",
+  "sold to": "Eng Soon Hardware Trading Sdn Bhd",
+  "sold to (address)": "B-73, Jalan Sri Kemuning, Off Jalan Mentakab, 28000 Temerloh, Pahang Darul Makmur",
+  "delivered to": "C/O Hillhome Builder Sdn Bhd",
+  "delivered to (address)": "DEL: Site LOT 2091, Mukim Bentong, Pahang Darul Makmur",
+  "D/O number": ["I-2511/0163"],
+  "P/O number": ["SC14/11/2025-012599"],
+  "Vehicle number": ["SK2266E"],
+  "date": ["2025-11-27"],
+  "items": [
+    {
+      "description": "R10 X 12M X 138PCS BS X 1.022/MT",
+      "quantity": "5.1100 MT",
+      "weight_mt": "5.1100"
+    }
+  ],
+  "total_quantity": "5.1100 MT",
+  "total_weight_mt": "5.1100"
+}

@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "source_pdf": "klang_valley_wire.pdf",
+    "doc_type": "delivery_order",
+    "status": "HUMAN_REVIEWED",
+    "notes": "Klang Valley Wire Sdn Bhd DO to Sudut Swasta / YPC Wong Construction"
+  },
+  "D/O issuer name": "Klang Valley Wire Sdn. Bhd.",
+  "sold to": "Sudut Swasta Sdn Bhd",
+  "sold to (address)": "No. 19, Jalan Meranti Permai 3, Meranti Permai Industrial Park, Batu 15, Jalan Puchong, 47100 Puchong",
+  "delivered to": "C/O YPC Wong Construction Sdn Bhd",
+  "delivered to (address)": "DEL: LOT 4341, Mukim Teluk Panglima Garang, Daerah Kuala Langat, Selangor",
+  "D/O number": ["DO-2511/0046"],
+  "P/O number": ["PO-25100213"],
+  "Vehicle number": ["JWP8186"],
+  "date": ["2025-11-05"],
+  "items": [
+    {
+      "description": "R6M X 12M X 375 PCS X 0.999/MT - CQ 5.5MM, REF NO:2025/10/009",
+      "quantity": "6.0000 BDL",
+      "weight_mt": "6.0000"
+    }
+  ],
+  "total_quantity": "6.0000",
+  "total_weight_mt": "6.0000"
+}

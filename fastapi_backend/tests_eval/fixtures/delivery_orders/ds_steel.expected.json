@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "source_pdf": "ds_steel.pdf",
+    "doc_type": "delivery_order",
+    "status": "HUMAN_REVIEWED",
+    "notes": "DS Steel Sdn Bhd DO to Hiap Teck Hardware / Athens Park Engineering"
+  },
+  "D/O issuer name": "DS Steel Sdn Bhd",
+  "sold to": "Hiap Teck Hardware Sdn Bhd",
+  "sold to (address)": "C/O Athens Park Engineering Sdn Bhd (PO:E6608), Project: 44 Units Shop Office-SDP (BS) Sdn Bhd, Project Code: AP81-44U, LOT PT 32278, Persiaran Metafasa, Mukim Petaling, Bukit Subang Seksyen U16, 40160 Shah Alam, Selangor Darul Ehsan (PR2)",
+  "delivered to": "As Below",
+  "D/O number": ["0359-25 (M)"],
+  "P/O number": ["PO25110122"],
+  "Vehicle number": ["VHU1805"],
+  "date": ["2025-11-15"],
+  "items": [
+    {
+      "description": "H.T. Deformed Round Bar R6 x 12M (2 BDL x 375pcs = 750PCS)",
+      "quantity": "2 BDL",
+      "weight_mt": "1.9980"
+    },
+    {
+      "description": "H.T. Deformed Round Bar R10 x 12M (5 BDL x 138pcs = 690PCS)",
+      "quantity": "5 BDL",
+      "weight_mt": "5.1100"
+    }
+  ],
+  "total_quantity": "7 BDL",
+  "total_weight_mt": "7.1080"
+}

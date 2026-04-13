@@ -27,6 +27,8 @@
             --green-bg: #ecfdf5;
             --red: #dc2626;
             --red-bg: #fef2f2;
+            --orange: #ea580c;
+            --orange-bg: #fff7ed;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -85,6 +87,10 @@
             letter-spacing: -0.03em;
             line-height: 1.1;
             margin: 0 0 6px 0;
+            text-transform: none;
+        }
+
+        .reveal h3 {
             text-transform: none;
         }
 
@@ -268,7 +274,7 @@
             color: var(--mid-blue);
         }
 
-        /* ── Slide 4: Pricing Tiers ───────────────── */
+        /* ── Pricing Tiers ────────────────────────── */
 
         .pricing-grid {
             display: grid;
@@ -431,21 +437,13 @@
             line-height: 1.7;
         }
 
-        /* ── Slide 5: Extra Usage ─────────────────── */
-
-        .usage-layout {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-        }
+        /* ── Usage section ────────────────────────── */
 
         .usage-section {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 16px;
             overflow: hidden;
-            flex: 1;
             display: flex;
             flex-direction: column;
             box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06);
@@ -475,73 +473,130 @@
             border-radius: 8px;
         }
 
-        .usage-table-grid {
+        /* ── Support grid ─────────────────────────── */
+
+        .support-grid {
             display: grid;
-            grid-template-columns: 1.3fr 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
             flex: 1;
         }
 
-        .usage-cell {
-            padding: 14px 28px;
-            font-size: 0.9em;
-            border-bottom: 1px solid #eef2f5;
-            display: flex;
-            align-items: center;
+        .support-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06);
         }
 
-        .usage-cell.header {
-            font-weight: 600;
-            color: var(--text-muted);
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            padding: 12px 28px;
-            background: #f5f8fa;
-        }
-
-        .usage-cell.duration {
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .usage-cell.price {
-            color: var(--text);
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .usage-cell.highlight {
-            background: rgba(14, 112, 178, 0.06);
-            color: var(--mid-blue);
+        .support-card h3 {
+            font-size: 1.05em;
             font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 14px;
         }
 
-        .usage-cell.header.highlight-header {
-            background: rgba(14, 112, 178, 0.08);
+        .support-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
         }
 
-        .usage-bottom {
-            display: flex;
-            align-items: center;
-            gap: 28px;
-            margin-top: auto;
-            padding-top: 14px;
+        .support-card ul li {
+            font-size: 0.88em;
+            color: var(--text-secondary);
+            padding: 5px 0 5px 22px;
+            position: relative;
+            line-height: 1.45;
         }
 
-        .usage-note {
+        .support-card ul li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: 700;
+            font-size: 0.95em;
+        }
+
+        .support-card.extra ul li::before {
+            content: "+";
+            color: var(--mid-blue);
+        }
+
+        /* ── Appendix tables ──────────────────────── */
+
+        .appendix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82em;
+            table-layout: fixed;
+        }
+
+        .appendix-table th {
+            background: var(--navy);
+            color: var(--white);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
             font-size: 0.78em;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            padding: 8px 12px;
+            border-bottom: none;
+            text-align: left !important;
+            white-space: nowrap;
         }
 
-        .usage-note-dot {
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: var(--sec-blue);
-            flex-shrink: 0;
+        .appendix-table td {
+            padding: 6px 12px;
+            border-bottom: 1px solid #eaeef2;
+            color: var(--text-secondary);
+            line-height: 1.35;
+            vertical-align: middle;
+        }
+
+        .appendix-table tbody tr:nth-child(even) td {
+            background: #f7f9fb;
+        }
+
+        .appendix-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .appendix-table .highlight-row td {
+            background: rgba(14, 112, 178, 0.07) !important;
+            color: var(--navy);
+            font-weight: 600;
+        }
+
+        .tag-included {
+            display: inline-block;
+            background: var(--green-bg);
+            color: var(--green);
+            font-size: 0.85em;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+
+        .tag-extra {
+            display: inline-block;
+            background: var(--orange-bg);
+            color: var(--orange);
+            font-size: 0.85em;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+
+        .tag-setup {
+            display: inline-block;
+            background: #f0f0ff;
+            color: #5b5bd6;
+            font-size: 0.85em;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
         }
 
         /* ── Reveal overrides ─────────────────────── */
@@ -557,7 +612,6 @@
             bottom: 16px !important;
         }
 
-        /* ── Print ────────────────────────────────── */
         @media print {
             .confidential-bar { position: fixed; }
         }
@@ -603,8 +657,8 @@
                     </div>
                     <div class="overview-card">
                         <div class="card-number">04</div>
-                        <h3>Ongoing Support</h3>
-                        <p>Direct access to the team that built your system. Continuous monitoring, accuracy optimization, and responsive technical support included in every plan.</p>
+                        <h3>Annual Page Pool & Support</h3>
+                        <p>420,000 pages per year shared across all branches &mdash; no monthly expiry, no per-branch limits. Automatic alerts at 80% usage. Priority support with dedicated account manager on commitment plans.</p>
                     </div>
                 </div>
             </section>
@@ -613,30 +667,34 @@
             <section>
                 <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
                 <h2>How We Compare</h2>
-                <div class="slide-subtitle">Custom-built vs off-the-shelf</div>
+                <div class="slide-subtitle">API-only vs fully managed service</div>
 
-                <div class="compare-grid">
-                    <div class="compare-card them">
-                        <h3>Generic OCR Vendor</h3>
-                        <ul>
-                            <li>Off-the-shelf processing only</li>
-                            <li>No custom form mapping</li>
+                <div class="compare-grid" style="align-items: stretch;">
+                    <div class="compare-card them" style="display: flex; flex-direction: column;">
+                        <h3>DIY with Cloud APIs</h3>
+                        <ul style="flex: 1;">
+                            <li>Raw OCR API only &mdash; you build the rest</li>
+                            <li>No custom form mapping or templates</li>
                             <li>No dedicated support team</li>
-                            <li>You handle integration yourself</li>
+                            <li>You hire developers, manage infra</li>
                             <li>No iteration on your documents</li>
+                            <li>Monthly quota expires &mdash; no annual pool</li>
                         </ul>
-                        <div class="compare-price">RM 0.15 &ndash; 0.16 / page</div>
+                        <div class="compare-price">RM 0.04 &ndash; 0.07 / page</div>
+                        <div style="font-size: 0.78em; color: var(--text-muted); margin-top: 8px; line-height: 1.45; height: 3.6em; overflow: hidden;">API cost only. Based on Azure, AWS, Google published rates. Does not include developer time, infra, or maintenance.</div>
                     </div>
-                    <div class="compare-card us">
+                    <div class="compare-card us" style="display: flex; flex-direction: column;">
                         <h3>Our Service</h3>
-                        <ul>
+                        <ul style="flex: 1;">
                             <li>Custom-built for your documents</li>
-                            <li>Tailored form templates</li>
-                            <li>Direct access to our team</li>
-                            <li>Processing + support included</li>
+                            <li>Tailored form templates included</li>
+                            <li>Direct access to our engineering team</li>
+                            <li>Processing + infra + support all-in</li>
                             <li>Continuous improvement & iteration</li>
+                            <li>Annual page pool shared across branches</li>
                         </ul>
-                        <div class="compare-price">From RM 0.167 / page</div>
+                        <div class="compare-price">From RM 0.143 / page</div>
+                        <div style="font-size: 0.78em; color: var(--mid-blue); margin-top: 8px; font-weight: 500; line-height: 1.45; height: 3.6em; overflow: hidden;">Complete managed service. No hidden costs, no developer hires, no infrastructure to manage.</div>
                     </div>
                 </div>
             </section>
@@ -647,13 +705,11 @@
                 <h2>Setup & Onboarding</h2>
                 <div class="slide-subtitle">RM 30,000 one-time &mdash; covers development, customisation, and pilot</div>
 
-                <!-- Timeline + Cards unified grid -->
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;">
 
                         <!-- Column 1 -->
                         <div style="display: flex; flex-direction: column; align-items: center;">
-                            <!-- Node -->
                             <div style="position: relative; width: 100%; display: flex; justify-content: center; margin-bottom: 28px;">
                                 <div style="position: absolute; top: 24px; left: 50%; right: -50%; height: 4px; background: linear-gradient(90deg, var(--mid-blue), var(--sec-blue)); z-index: 0;"></div>
                                 <div style="width: 52px; height: 52px; border-radius: 50%; background: var(--mid-blue); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(14, 112, 178, 0.25); z-index: 1;">
@@ -661,7 +717,6 @@
                                 </div>
                             </div>
                             <div style="font-size: 0.72em; font-weight: 700; color: var(--mid-blue); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; text-align: center !important;">Month 1</div>
-                            <!-- Card -->
                             <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px 24px; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); width: 100%; text-align: center !important;">
                                 <div style="font-size: 1.1em; font-weight: 700; color: var(--navy); margin-bottom: 12px; text-align: center !important;">Development</div>
                                 <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.6; text-align: center !important;">Custom OCR pipeline build, cloud infrastructure setup, form template design, and initial system integration.</div>
@@ -670,7 +725,6 @@
 
                         <!-- Column 2 -->
                         <div style="display: flex; flex-direction: column; align-items: center;">
-                            <!-- Node -->
                             <div style="position: relative; width: 100%; display: flex; justify-content: center; margin-bottom: 28px;">
                                 <div style="position: absolute; top: 24px; left: -50%; right: -50%; height: 4px; background: linear-gradient(90deg, var(--mid-blue), var(--sec-blue), var(--green)); z-index: 0;"></div>
                                 <div style="width: 52px; height: 52px; border-radius: 50%; background: var(--sec-blue); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46, 165, 216, 0.25); z-index: 1;">
@@ -678,7 +732,6 @@
                                 </div>
                             </div>
                             <div style="font-size: 0.72em; font-weight: 700; color: var(--sec-blue); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; text-align: center !important;">Month 2 &ndash; 3</div>
-                            <!-- Card -->
                             <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px 24px; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); width: 100%; text-align: center !important;">
                                 <div style="font-size: 1.1em; font-weight: 700; color: var(--navy); margin-bottom: 12px; text-align: center !important;">Customisation & Pilot</div>
                                 <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.6; text-align: center !important;">Calibrate accuracy with your real documents. Iterative refinement of templates based on your team's feedback.</div>
@@ -687,7 +740,6 @@
 
                         <!-- Column 3 -->
                         <div style="display: flex; flex-direction: column; align-items: center;">
-                            <!-- Node -->
                             <div style="position: relative; width: 100%; display: flex; justify-content: center; margin-bottom: 28px;">
                                 <div style="position: absolute; top: 24px; left: -50%; right: 50%; height: 4px; background: linear-gradient(90deg, var(--sec-blue), var(--green)); z-index: 0;"></div>
                                 <div style="width: 52px; height: 52px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); z-index: 1;">
@@ -695,10 +747,9 @@
                                 </div>
                             </div>
                             <div style="font-size: 0.72em; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; text-align: center !important;">Month 4+</div>
-                            <!-- Card -->
                             <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px 24px; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); width: 100%; text-align: center !important;">
                                 <div style="font-size: 1.1em; font-weight: 700; color: var(--navy); margin-bottom: 12px; text-align: center !important;">Service Begins</div>
-                                <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.6; text-align: center !important;">Monthly billing starts based on your selected plan. Full platform access, ongoing support, and continuous optimisation.</div>
+                                <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.6; text-align: center !important;">Annual billing starts based on your selected plan. Full platform access, ongoing support, and continuous optimisation.</div>
                             </div>
                         </div>
 
@@ -712,23 +763,24 @@
                 </div>
             </section>
 
-            <!-- ════ Slide 5: Pricing Tiers ════ -->
+            <!-- ════ Slide 5: Subscription Plans ════ -->
             <section>
                 <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
-                <h2>Pricing Plans</h2>
-                <div class="slide-subtitle">30,000 pages/month included in every plan &mdash; billing begins after onboarding</div>
+                <h2>Subscription Plans</h2>
+                <div class="slide-subtitle">Commitment plans include a 420,000-page annual pool &mdash; shared across all branches, no monthly expiry</div>
 
                 <div class="pricing-grid">
                     <div class="tier-card">
                         <div class="tier-label">Flexible</div>
                         <div class="tier-name">Monthly</div>
                         <div class="price-amount"><span class="price-currency">RM</span>7,000<span class="price-period"> /mo</span></div>
-                        <div class="price-per-page">RM 0.233 per page</div>
+                        <div class="price-per-page">RM 0.20 per page &middot; 35,000 pages/month</div>
                         <ul class="tier-features">
                             <li>No minimum commitment</li>
                             <li>Cancel anytime</li>
-                            <li>30,000 pages included</li>
+                            <li>35,000 pages per month</li>
                             <li>Full platform access</li>
+                            <li>Email & WhatsApp support</li>
                         </ul>
                     </div>
 
@@ -736,12 +788,14 @@
                         <div class="tier-label">Recommended</div>
                         <div class="tier-name">12-Month<span class="tier-badge">Best Plan</span></div>
                         <div class="price-amount"><span class="price-currency">RM</span>6,000<span class="price-period"> /mo</span></div>
-                        <div class="price-per-page">RM 0.20 per page</div>
+                        <div class="price-per-page">RM 0.171 per page &middot; 420,000 pages/year</div>
                         <ul class="tier-features">
-                            <li>12-month commitment</li>
-                            <li>Priority support</li>
-                            <li>30,000 pages included</li>
-                            <li>Quarterly optimization reviews</li>
+                            <li><strong>Annual page pool</strong> &mdash; shared across all branches</li>
+                            <li>No monthly expiry &mdash; use at your own pace</li>
+                            <li>Automatic alerts at 80% usage</li>
+                            <li>Priority support (see next slide)</li>
+                            <li>Dedicated account manager</li>
+                            <li>Quarterly optimisation reviews</li>
                         </ul>
                         <div class="savings-pill">Save ~14% vs monthly</div>
                     </div>
@@ -750,12 +804,14 @@
                         <div class="tier-label">Best Value</div>
                         <div class="tier-name">24-Month</div>
                         <div class="price-amount"><span class="price-currency">RM</span>5,000<span class="price-period"> /mo</span></div>
-                        <div class="price-per-page">RM 0.167 per page</div>
+                        <div class="price-per-page">RM 0.143 per page &middot; 420,000 pages/year</div>
                         <ul class="tier-features">
-                            <li>24-month commitment</li>
-                            <li>Priority support</li>
-                            <li>30,000 pages included</li>
-                            <li>Rate locked for full term</li>
+                            <li><strong>Annual page pool</strong> &mdash; shared across all branches</li>
+                            <li>No monthly expiry &mdash; use at your own pace</li>
+                            <li>Automatic alerts at 80% usage</li>
+                            <li>Priority support (see next slide)</li>
+                            <li>Rate locked for full 24 months</li>
+                            <li>Dedicated account manager</li>
                         </ul>
                         <div class="savings-pill">Save ~29% vs monthly</div>
                     </div>
@@ -763,64 +819,326 @@
 
                 <div class="pricing-bottom">
                     <div class="pricing-notes" style="text-align: left !important; flex: 1;">
-                        Unused pages do not roll over &middot;
-                        Overage billed postpaid at end of billing cycle &middot;
-                        Billing begins Month 4 after onboarding
+                        <strong>Annual pool:</strong> 420,000 pages valid for 12 months from billing start &mdash; all branches draw from one shared pool &middot;
+                        Alerts at 80% and 100% usage &middot;
+                        Real-time dashboard for all branches<br>
+                        <strong>After contract ends:</strong> Renew at the same rate for another term, or switch to monthly at RM 7,000/mo &middot;
+                        No price increase during contract term
                     </div>
                 </div>
             </section>
 
-            <!-- ════ Slide 6: Additional Usage ════ -->
+            <!-- ════ Slide 6: Enterprise / Pay-Per-Use ════ -->
             <section>
                 <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
-                <h2>Additional Usage</h2>
-                <div class="slide-subtitle">Flexible overage for pages beyond your 30,000/month base</div>
+                <h2>Enterprise</h2>
+                <div class="slide-subtitle">Low upfront, pay only for what you use &mdash; all maintenance and infrastructure included</div>
 
-                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; flex: 1;">
-                    <!-- Postpaid -->
-                    <div class="usage-section">
-                        <div class="usage-section-header">
-                            <div class="usage-section-title">Postpaid Overage</div>
-                            <div class="usage-section-tag">Up to 50,000 pages</div>
+                <div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; flex: 1;">
+                    <!-- Left: pricing summary -->
+                    <div style="display: flex; flex-direction: column; gap: 18px;">
+                        <!-- Setup -->
+                        <div style="background: var(--card-bg); border: 2px solid var(--mid-blue); border-radius: 16px; padding: 28px; box-shadow: 0 4px 20px rgba(14, 112, 178, 0.1);">
+                            <div style="font-size: 0.78em; font-weight: 600; color: var(--mid-blue); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;">One-Time Setup</div>
+                            <div style="font-size: 3em; font-weight: 800; color: var(--navy); letter-spacing: -0.03em; line-height: 1;">
+                                <span style="font-size: 0.38em; font-weight: 600; color: var(--text-muted); vertical-align: super; margin-right: 2px;">RM</span>20,000
+                            </div>
+                            <div style="font-size: 0.88em; color: var(--text-secondary); margin-top: 8px; line-height: 1.5;">Covers development, pilot, onboarding, and first batch of templates during 3-month setup period.</div>
                         </div>
-                        <div class="usage-table-grid" style="grid-template-columns: 1.5fr 1fr;">
-                            <div class="usage-cell header">Monthly Volume</div>
-                            <div class="usage-cell header">Rate Per Page</div>
-
-                            <div class="usage-cell duration" style="font-size: 1em; font-weight: 600; color: var(--navy);">First 30,000 pages</div>
-                            <div class="usage-cell price" style="font-size: 1em; color: var(--text-muted);">Included in plan</div>
-
-                            <div class="usage-cell duration" style="font-size: 1em;">30,001 &ndash; 40,000</div>
-                            <div class="usage-cell highlight" style="font-size: 1.05em;">RM 0.18 / page</div>
-
-                            <div class="usage-cell duration" style="font-size: 1em;">40,001 &ndash; 50,000</div>
-                            <div class="usage-cell highlight" style="font-size: 1.05em;">RM 0.15 / page</div>
-                        </div>
-                        <div style="padding: 14px 28px; font-size: 0.82em; color: var(--text-muted); border-top: 1px solid #eef2f5;">
-                            Billed automatically at end of each billing cycle. No pre-approval needed.
+                        <!-- Per page -->
+                        <div style="background: linear-gradient(165deg, #e8f2fa 0%, #f0f8ff 100%); border: 2px solid var(--mid-blue); border-radius: 16px; padding: 28px; flex: 1;">
+                            <div style="font-size: 0.78em; font-weight: 600; color: var(--mid-blue); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;">Pay Per Use</div>
+                            <div style="font-size: 2.4em; font-weight: 800; color: var(--navy); letter-spacing: -0.03em; line-height: 1;">
+                                <span style="font-size: 0.4em; font-weight: 600; color: var(--text-muted); vertical-align: super; margin-right: 2px;">RM</span>0.14<span style="font-size: 0.28em; font-weight: 400; color: var(--text-muted);"> /page</span>
+                            </div>
+                            <div style="font-size: 0.88em; color: var(--text-secondary); margin-top: 8px; line-height: 1.5;">
+                                Billed monthly based on actual usage. No minimum volume, no annual commitment. Infrastructure, maintenance, and support already costed in.
+                            </div>
+                            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(14, 112, 178, 0.2); font-size: 0.82em; color: var(--mid-blue); font-weight: 600;">
+                                30,000 pages/month = RM 4,200 &middot; Pay only what you process
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Prepaid / High Volume -->
-                    <div style="background: linear-gradient(165deg, #e8f2fa 0%, #f0f8ff 100%); border: 2px solid var(--mid-blue); border-radius: 16px; padding: 32px 30px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(14, 112, 178, 0.1);">
-                        <div style="font-size: 2em; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; margin-bottom: 4px;">50,000+</div>
-                        <div style="font-size: 0.9em; font-weight: 600; color: var(--mid-blue); margin-bottom: 16px;">pages/month</div>
-                        <div style="font-size: 1.15em; font-weight: 700; color: var(--navy); margin-bottom: 14px;">Prepaid &mdash; By Arrangement</div>
-                        <div style="font-size: 0.92em; color: var(--text-secondary); line-height: 1.55; margin-bottom: 20px;">Additional capacity must be scheduled in advance to allow infrastructure scaling.</div>
-                        <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 12px 18px;">
-                                <img src="https://unpkg.com/lucide-static@latest/icons/calendar-clock.svg" width="22" height="22" style="filter: invert(27%) sepia(83%) saturate(1200%) hue-rotate(190deg) brightness(90%); flex-shrink: 0;" />
-                                <span style="font-size: 0.9em; font-weight: 600; color: var(--navy);">Must be arranged before billing period</span>
+                    <!-- Right: what's included + what's extra -->
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); flex: 1; display: flex; flex-direction: column;">
+                            <div style="padding: 10px 16px; background: var(--green); display: flex; align-items: center;">
+                                <span style="font-size: 0.82em; font-weight: 700; color: var(--white); letter-spacing: 0.03em;">COSTED INTO PER-PAGE RATE</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 12px 18px;">
-                                <img src="https://unpkg.com/lucide-static@latest/icons/hand-coins.svg" width="22" height="22" style="filter: invert(27%) sepia(83%) saturate(1200%) hue-rotate(190deg) brightness(90%); flex-shrink: 0;" />
-                                <span style="font-size: 0.9em; font-weight: 600; color: var(--navy);">Pricing determined per arrangement</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 12px 18px;">
-                                <img src="https://unpkg.com/lucide-static@latest/icons/server.svg" width="22" height="22" style="filter: invert(27%) sepia(83%) saturate(1200%) hue-rotate(190deg) brightness(90%); flex-shrink: 0;" />
-                                <span style="font-size: 0.9em; font-weight: 600; color: var(--navy);">Infrastructure scaling lead time required</span>
+                            <div style="padding: 14px 20px; flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
+                                <div style="font-size: 0.82em; color: var(--text-secondary); line-height: 2;">
+                                    <div>&check;&ensp;Cloud infrastructure</div>
+                                    <div>&check;&ensp;OCR & AI processing</div>
+                                    <div>&check;&ensp;System maintenance</div>
+                                    <div>&check;&ensp;Security patches</div>
+                                    <div>&check;&ensp;Usage dashboard</div>
+                                    <div>&check;&ensp;Data retention (12 mo)</div>
+                                </div>
+                                <div style="font-size: 0.82em; color: var(--text-secondary); line-height: 2;">
+                                    <div>&check;&ensp;Email & WhatsApp support</div>
+                                    <div>&check;&ensp;Bug fixes & incidents</div>
+                                    <div>&check;&ensp;Monthly usage reports</div>
+                                    <div>&check;&ensp;Minor template tweaks</div>
+                                    <div>&check;&ensp;Backups & DR</div>
+                                    <div>&check;&ensp;Monitoring & alerts</div>
+                                </div>
                             </div>
                         </div>
+
+                        <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06);">
+                            <div style="padding: 10px 16px; background: var(--orange); display: flex; align-items: center;">
+                                <span style="font-size: 0.82em; font-weight: 700; color: var(--white); letter-spacing: 0.03em;">QUOTED SEPARATELY</span>
+                            </div>
+                            <div style="padding: 12px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
+                                <div style="font-size: 0.82em; color: var(--text-secondary); line-height: 2;">
+                                    <div>+&ensp;New document templates</div>
+                                    <div>+&ensp;Branch onboarding</div>
+                                    <div>+&ensp;On-site visits</div>
+                                </div>
+                                <div style="font-size: 0.82em; color: var(--text-secondary); line-height: 2;">
+                                    <div>+&ensp;ERP / accounting integration</div>
+                                    <div>+&ensp;Custom development</div>
+                                    <div>+&ensp;After-hours support</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="font-size: 0.78em; color: var(--text-muted); line-height: 1.5; padding: 0 4px;">
+                            <strong style="color: var(--navy);">No commitment.</strong> Month-to-month billing based on actual pages processed. Scale up or down freely. Ideal for organisations that want cost transparency and operational flexibility.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════ Slide 7: Priority Support ════ -->
+            <section>
+                <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
+                <h2>Priority Support</h2>
+                <div class="slide-subtitle">Included with 12-month and 24-month plans</div>
+
+                <div class="support-grid">
+                    <div class="support-card">
+                        <h3>Included in Your Plan</h3>
+                        <ul>
+                            <li>4-hour response time (Mon&ndash;Fri, 9 AM&ndash;6 PM)</li>
+                            <li>Dedicated account manager</li>
+                            <li>Email & WhatsApp support channels</li>
+                            <li>Real-time usage dashboard for all branches</li>
+                            <li>Automatic alerts at 80% and 100% pool usage</li>
+                            <li>System maintenance & security patches</li>
+                            <li>Quarterly optimisation reviews</li>
+                            <li>Monthly usage & accuracy reports</li>
+                            <li>Minor template adjustments (field tweaks, formatting)</li>
+                            <li>Bug fixes & incident resolution</li>
+                        </ul>
+                    </div>
+
+                    <div class="support-card extra">
+                        <h3>Available as Add-Ons</h3>
+                        <ul>
+                            <li>New document type templates (quoted per template)</li>
+                            <li>Major template restructuring</li>
+                            <li>New branch onboarding & training sessions</li>
+                            <li>On-site visits (quoted per visit)</li>
+                            <li>After-hours & weekend support</li>
+                            <li>Custom integrations (ERP, accounting systems)</li>
+                            <li>Custom feature development</li>
+                            <li>Historical data migration & backfill</li>
+                            <li>Additional language support (BM, Chinese, Tamil)</li>
+                            <li>Formal compliance audit support</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin-top: auto; padding-top: 16px; display: flex; gap: 18px;">
+                    <div class="dev-fee" style="flex: 1;">
+                        <strong>Monthly plan</strong> includes standard support &mdash; email &amp; WhatsApp during business hours, next-business-day response
+                    </div>
+                    <div class="dev-fee" style="flex: 1; background: linear-gradient(165deg, #e8f2fa 0%, #f0f8ff 100%); border-color: var(--mid-blue);">
+                        <strong>12 &amp; 24-month plans</strong> include everything on the left &mdash; priority queue, 4-hour response, dedicated account manager
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════ Slide 7: Additional Usage ════ -->
+            <section>
+                <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
+                <h2>Additional Usage</h2>
+                <div class="slide-subtitle">When your annual pool runs out &mdash; or if you need more capacity</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1;">
+                    <!-- Postpaid Overage -->
+                    <div style="display: flex; flex-direction: column; gap: 18px;">
+                        <div class="usage-section" style="flex: 1;">
+                            <div class="usage-section-header">
+                                <div class="usage-section-title">Postpaid Overage</div>
+                                <div class="usage-section-tag">Billed end of billing cycle</div>
+                            </div>
+                            <div style="padding: 24px 28px; flex: 1; display: flex; flex-direction: column; gap: 16px;">
+                                <div style="font-size: 0.95em; color: var(--text-secondary); line-height: 1.6;">
+                                    If your branches exhaust the annual pool before the year ends, additional pages are processed automatically and billed <strong>postpaid</strong> at the end of the billing cycle.
+                                </div>
+                                <div style="background: var(--sky-soft); border-radius: 12px; padding: 16px 20px;">
+                                    <div style="font-size: 0.82em; font-weight: 700; color: var(--navy); margin-bottom: 8px;">How it works</div>
+                                    <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.7;">
+                                        1. You receive alerts at <strong>80%</strong> pool usage<br>
+                                        2. Service continues uninterrupted past 100%<br>
+                                        3. Overage billed at end of billing cycle<br>
+                                        4. <strong>No branch disruption</strong> &mdash; no approvals needed to keep processing
+                                    </div>
+                                </div>
+                                <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px 20px;">
+                                    <div style="font-size: 0.82em; font-weight: 700; color: var(--navy); margin-bottom: 6px;">Overage rate</div>
+                                    <div style="font-size: 0.92em; color: var(--text-secondary); line-height: 1.6;">
+                                        Postpaid overage is billed at <strong>your plan's per-page rate</strong> &mdash; no penalty markup. Exact rate depends on your plan tier.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- High Volume / Advance Arrangement -->
+                    <div style="background: linear-gradient(165deg, #e8f2fa 0%, #f0f8ff 100%); border: 2px solid var(--mid-blue); border-radius: 16px; padding: 32px 30px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(14, 112, 178, 0.1);">
+                        <div style="font-size: 1.6em; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; margin-bottom: 4px;">Need More Capacity?</div>
+                        <div style="font-size: 0.9em; font-weight: 600; color: var(--mid-blue); margin-bottom: 18px;">Top-up your annual pool or increase base capacity</div>
+                        <div style="font-size: 0.92em; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px;">
+                            If you anticipate sustained higher volumes, we can arrange a <strong>pool top-up</strong> or capacity increase. This requires advance discussion because we may need to scale cloud infrastructure and adjust billing with external providers.
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 14px 18px;">
+                                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(14, 112, 178, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mid-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                </div>
+                                <span style="font-size: 0.88em; color: var(--text); line-height: 1.4;"><strong>2 weeks advance notice</strong> required for capacity scaling</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 14px 18px;">
+                                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(14, 112, 178, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mid-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                </div>
+                                <span style="font-size: 0.88em; color: var(--text); line-height: 1.4;"><strong>Custom pricing</strong> based on volume and duration</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 14px; background: var(--white); border-radius: 12px; padding: 14px 18px;">
+                                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(14, 112, 178, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mid-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                </div>
+                                <span style="font-size: 0.88em; color: var(--text); line-height: 1.4;"><strong>Infrastructure scaling</strong> may be needed for sustained high volume</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(14, 112, 178, 0.2); font-size: 0.82em; color: var(--text-muted); line-height: 1.5;">
+                            Contact your account manager to discuss. We will provide a quote based on your projected volume and timeline.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════ Slide 8: Appendix — Vendor Comparison ════ -->
+            <section>
+                <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
+                <h2 style="font-size: 1.8em; margin-bottom: 2px;">Appendix: Cloud OCR Vendor Pricing</h2>
+                <div class="slide-subtitle" style="margin-bottom: 14px; font-size: 0.92em;">Published rates for structured extraction &mdash; API cost only, no support or templates included</div>
+
+                <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06);">
+                    <table class="appendix-table" style="table-layout: fixed;">
+                        <colgroup>
+                            <col style="width: 11%;">
+                            <col style="width: 30%;">
+                            <col style="width: 16%;">
+                            <col style="width: 13%;">
+                            <col style="width: 30%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Product</th>
+                                <th>USD / Page</th>
+                                <th>MYR / Page</th>
+                                <th>Scope</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Azure</strong></td><td>Document Intelligence (Prebuilt)</td><td>$0.01</td><td>RM 0.044</td><td>Invoice / receipt / ID. API only.</td></tr>
+                            <tr><td><strong>Azure</strong></td><td>Document Intelligence (Custom)</td><td>$0.01&ndash;0.05</td><td>RM 0.044&ndash;0.22</td><td>Custom template train + extract. API only.</td></tr>
+                            <tr><td><strong>AWS</strong></td><td>Textract (Analyze Document)</td><td>$0.015</td><td>RM 0.066</td><td>Key-value pairs + tables. API only.</td></tr>
+                            <tr><td><strong>Google</strong></td><td>Document AI (Form Parser)</td><td>$0.065</td><td>RM 0.286</td><td>Key-value, tables, checkboxes. API only.</td></tr>
+                            <tr><td><strong>Google</strong></td><td>Document AI (Invoice Parser)</td><td>$0.065&ndash;0.10</td><td>RM 0.286&ndash;0.44</td><td>Structured invoice fields. API only.</td></tr>
+                            <tr><td><strong>ABBYY</strong></td><td>Vantage Cloud</td><td>~$0.05&ndash;0.12</td><td>RM 0.22&ndash;0.53</td><td>Pre-trained skills. Setup $5K&ndash;$25K extra.</td></tr>
+                            <tr><td><strong>Nanonets</strong></td><td>Pro</td><td>~$0.10&ndash;0.30</td><td>RM 0.44&ndash;1.32</td><td>Custom models + API. Self-service only.</td></tr>
+                            <tr><td><strong>Docsumo</strong></td><td>Business</td><td>~$0.05&ndash;0.10</td><td>RM 0.22&ndash;0.44</td><td>Pre-trained + custom. Self-service only.</td></tr>
+                            <tr class="highlight-row"><td><strong style="color: var(--mid-blue);">Ours</strong></td><td><strong>Fully managed (24-mo plan)</strong></td><td>&mdash;</td><td><strong style="color: var(--mid-blue);">RM 0.143</strong></td><td><strong>Templates + support + infra. All included.</strong></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div style="background: var(--sky-soft); border-radius: 10px; padding: 12px 16px; font-size: 0.78em; color: var(--text-secondary); line-height: 1.5;">
+                        <strong style="color: var(--navy);">What API-only means:</strong> You get an HTTP endpoint. You still need developers to build the pipeline, design templates, host infrastructure, handle errors, and maintain the system. Those costs dwarf the API fee.
+                    </div>
+                    <div style="background: var(--sky-soft); border-radius: 10px; padding: 12px 16px; font-size: 0.78em; color: var(--text-secondary); line-height: 1.5;">
+                        <strong style="color: var(--navy);">Sources:</strong> Azure, AWS, and Google pricing pages (Q1 2026). ABBYY, Nanonets, Docsumo from published plans and partner disclosures. MYR at 1 USD = 4.40 MYR.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════ Slide 9: Appendix — What's Included vs Add-Ons ════ -->
+            <section>
+                <div class="confidential-bar">Confidential &mdash; For Intended Recipient Only</div>
+                <h2 style="font-size: 1.8em; margin-bottom: 2px;">Appendix: Service Breakdown</h2>
+                <div class="slide-subtitle" style="margin-bottom: 10px; font-size: 0.92em;">What's bundled in your plan vs available as add-ons</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1;">
+                    <!-- Included -->
+                    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); display: flex; flex-direction: column;">
+                        <div style="padding: 10px 16px; background: var(--green); display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 0.85em; font-weight: 700; color: var(--white); letter-spacing: 0.03em;">INCLUDED IN PLAN</span>
+                        </div>
+                        <table class="appendix-table" style="flex: 1;">
+                            <colgroup><col style="width: 44%;"><col style="width: 56%;"></colgroup>
+                            <thead><tr><th>Service</th><th>Details</th></tr></thead>
+                            <tbody>
+                                <tr><td>OCR & AI processing</td><td>Up to 420K pages/year pool</td></tr>
+                                <tr><td>Cloud compute & hosting</td><td>Inference servers, app hosting</td></tr>
+                                <tr><td>Storage & database</td><td>Document images, extracted data, DB</td></tr>
+                                <tr><td>Backups & disaster recovery</td><td>Automated daily backups</td></tr>
+                                <tr><td>Usage dashboard</td><td>Real-time, all branches, 80% alerts</td></tr>
+                                <tr><td>Email & WhatsApp support</td><td>Mon&ndash;Fri business hours</td></tr>
+                                <tr><td>Bug fixes & incidents</td><td>4-hr response (commitment plans)</td></tr>
+                                <tr><td>System maintenance</td><td>Patches, updates, security, uptime</td></tr>
+                                <tr><td>Minor template tweaks</td><td>Field adjustments, formatting</td></tr>
+                                <tr><td>Monthly reports</td><td>Usage, accuracy, per-branch stats</td></tr>
+                                <tr><td>Data retention</td><td>12 months standard</td></tr>
+                                <tr><td>Account manager</td><td>Dedicated (12 & 24-mo only)</td></tr>
+                                <tr><td>Quarterly reviews</td><td>Optimisation sessions (12 & 24-mo)</td></tr>
+                                <tr><td>Postpaid overage</td><td>Uninterrupted; billed end of cycle</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add-ons -->
+                    <div style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(25, 43, 77, 0.06); display: flex; flex-direction: column;">
+                        <div style="padding: 10px 16px; background: var(--orange); display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 0.85em; font-weight: 700; color: var(--white); letter-spacing: 0.03em;">AVAILABLE AS ADD-ONS</span>
+                        </div>
+                        <table class="appendix-table" style="flex: 1;">
+                            <colgroup><col style="width: 50%;"><col style="width: 50%;"></colgroup>
+                            <thead><tr><th>Service</th><th>Pricing</th></tr></thead>
+                            <tbody>
+                                <tr><td>New document type template</td><td>Quoted per template</td></tr>
+                                <tr><td>Major template restructuring</td><td>Quoted per project</td></tr>
+                                <tr><td>New branch onboarding</td><td>Per branch (setup + training)</td></tr>
+                                <tr><td>Additional training sessions</td><td>Per session</td></tr>
+                                <tr><td>On-site visits</td><td>Per visit + travel expenses</td></tr>
+                                <tr><td>After-hours / weekend support</td><td>Premium hourly rate</td></tr>
+                                <tr><td>ERP integration (SAP, Oracle)</td><td>Quoted per integration</td></tr>
+                                <tr><td>Accounting system integration</td><td>Quoted per integration</td></tr>
+                                <tr><td>Custom feature development</td><td>Quoted per feature</td></tr>
+                                <tr><td>Historical data migration</td><td>Quoted based on volume</td></tr>
+                                <tr><td>Additional language support</td><td>Per language (BM, CN, Tamil)</td></tr>
+                                <tr><td>Extended data retention</td><td>Per year beyond 12 months</td></tr>
+                                <tr><td>Capacity top-up (pool increase)</td><td>Quoted; 2 weeks notice</td></tr>
+                                <tr><td>Compliance / audit support</td><td>Per engagement</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
