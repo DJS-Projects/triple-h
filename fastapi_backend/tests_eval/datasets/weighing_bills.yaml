@@ -1,0 +1,75 @@
+# Weighing Bill ground-truth dataset.
+# Loaded as Dataset[ExtractionInputs, WeighingBill, FixtureMetadata].
+name: weighing_bills
+evaluators:
+  - FieldAccuracy
+cases:
+  - name: alliance_steel_1
+    inputs:
+      pdf_path: fixtures/weighing_bills/alliance_steel_1.pdf
+    expected_output:
+      weighing_no: "202511041020"
+      contract_no: LXSKJ2025002-11
+      vehicle_no: ANR7792
+      material_name: STEEL BAR
+      gross_weight: 42.40 t
+      tare_weight: 22.62 t
+      net_weight: 19.78 t
+      off_weight: 0.00 t
+      actual_weight: 19.78 t
+      gross_time: "2025-11-04T19:27:03"
+      tare_time: "2025-11-04T16:50:39"
+      deliver: Alliance Steel
+      receiver: DS Steel Sdn. Bhd.
+      fleet_name: Lian Gang Logistics Sdn Bhd
+      remark: 20K
+    metadata:
+      source_pdf: alliance_steel_1.pdf
+      status: HUMAN_REVIEWED
+      notes: Alliance Steel weighing bill - DS Steel receiver, ANR7792 vehicle
+
+  - name: alliance_steel_2
+    inputs:
+      pdf_path: fixtures/weighing_bills/alliance_steel_2.pdf
+    expected_output:
+      weighing_no: "202511041088"
+      contract_no: LXSKJ2025001-10
+      vehicle_no: JWP8186
+      material_name: STEEL BAR
+      gross_weight: 56.12 t
+      tare_weight: 28.24 t
+      net_weight: 27.88 t
+      off_weight: 0.00 t
+      actual_weight: 27.88 t
+      gross_time: "2025-11-05T01:45:39"
+      tare_time: "2025-11-04T17:24:11"
+      deliver: Alliance Steel
+      receiver: EC Excel Wire Sdn. Bhd.
+      fleet_name: Lian Gang Logistics Sdn Bhd
+    metadata:
+      source_pdf: alliance_steel_2.pdf
+      status: HUMAN_REVIEWED
+      notes: Alliance Steel weighing bill - EC Excel Wire receiver, JWP8186 vehicle
+
+  - name: alliance_steel_3
+    inputs:
+      pdf_path: fixtures/weighing_bills/alliance_steel_3.pdf
+    expected_output:
+      weighing_no: "202601060874"
+      contract_no: LXSKJ2026002-1
+      vehicle_no: PRJ7792
+      material_name: STEEL BAR
+      gross_weight: 54.88 t
+      tare_weight: 29.36 t
+      net_weight: 25.52 t
+      off_weight: 0.00 t
+      actual_weight: 25.52 t
+      gross_time: "2026-01-06T22:29:49"
+      tare_time: "2026-01-06T16:10:18"
+      deliver: Alliance Steel
+      receiver: DS Steel Sdn. Bhd.
+      fleet_name: Lian Gang Logistics Sdn Bhd
+    metadata:
+      source_pdf: alliance_steel_3.pdf
+      status: HUMAN_REVIEWED
+      notes: Alliance Steel weighing bill - DS Steel receiver, PRJ7792 vehicle, Jan 2026

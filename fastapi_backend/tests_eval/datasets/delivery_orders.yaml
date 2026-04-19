@@ -1,0 +1,133 @@
+# Delivery Order ground-truth dataset.
+# Loaded as Dataset[ExtractionInputs, DeliveryOrder, FixtureMetadata].
+# Schema for these cases lives in tests_eval/schemas.py.
+name: delivery_orders
+evaluators:
+  - FieldAccuracy
+cases:
+  - name: coltron_sintari
+    inputs:
+      pdf_path: fixtures/delivery_orders/coltron_sintari.pdf
+    expected_output:
+      do_issuer_name: Sintari Sdn Bhd
+      sold_to: GBI Mesh & Bar Trading Sdn. Bhd.
+      sold_to_address: 8, Lorong Bakap Indah 10, Taman Bakap Indah, 14200 Sungai Bakap, Pulau Pinang Malaysia
+      delivered_to: Coltron Construction S/B-BCM
+      delivered_to_address: LOT 224 KWS Perindustrian Bukit Kayu Hitam, 06050 Bukit Kayu Hitam, Kedah
+      do_number: [DO-61581]
+      po_number: [PO2511-102]
+      vehicle_number: [MDX7849]
+      date: ["2025-11-18"]
+      items:
+        - description: HTD BARS 10MM X 12M (138PCS X 2 BDLS)
+          quantity: 2.0440 MT
+          weight_mt: "2.0440"
+      total_quantity: "2.0440"
+      total_weight_mt: "2.0440"
+    metadata:
+      source_pdf: coltron_sintari.pdf
+      status: HUMAN_REVIEWED
+      notes: Sintari Sdn Bhd DO to GBI Mesh & Bar / Coltron Construction
+
+  - name: ds_steel
+    inputs:
+      pdf_path: fixtures/delivery_orders/ds_steel.pdf
+    expected_output:
+      do_issuer_name: DS Steel Sdn Bhd
+      sold_to: Hiap Teck Hardware Sdn Bhd
+      sold_to_address: "C/O Athens Park Engineering Sdn Bhd (PO:E6608), Project: 44 Units Shop Office-SDP (BS) Sdn Bhd, Project Code: AP81-44U, LOT PT 32278, Persiaran Metafasa, Mukim Petaling, Bukit Subang Seksyen U16, 40160 Shah Alam, Selangor Darul Ehsan (PR2)"
+      delivered_to: As Below
+      do_number: ["0359-25 (M)"]
+      po_number: [PO25110122]
+      vehicle_number: [VHU1805]
+      date: ["2025-11-15"]
+      items:
+        - description: H.T. Deformed Round Bar R6 x 12M (2 BDL x 375pcs = 750PCS)
+          quantity: 2 BDL
+          weight_mt: "1.9980"
+        - description: H.T. Deformed Round Bar R10 x 12M (5 BDL x 138pcs = 690PCS)
+          quantity: 5 BDL
+          weight_mt: "5.1100"
+      total_quantity: 7 BDL
+      total_weight_mt: "7.1080"
+    metadata:
+      source_pdf: ds_steel.pdf
+      status: HUMAN_REVIEWED
+      notes: DS Steel Sdn Bhd DO to Hiap Teck Hardware / Athens Park Engineering
+
+  - name: klang_valley_wire
+    inputs:
+      pdf_path: fixtures/delivery_orders/klang_valley_wire.pdf
+    expected_output:
+      do_issuer_name: Klang Valley Wire Sdn. Bhd.
+      sold_to: Sudut Swasta Sdn Bhd
+      sold_to_address: No. 19, Jalan Meranti Permai 3, Meranti Permai Industrial Park, Batu 15, Jalan Puchong, 47100 Puchong
+      delivered_to: C/O YPC Wong Construction Sdn Bhd
+      delivered_to_address: "DEL: LOT 4341, Mukim Teluk Panglima Garang, Daerah Kuala Langat, Selangor"
+      do_number: ["DO-2511/0046"]
+      po_number: [PO-25100213]
+      vehicle_number: [JWP8186]
+      date: ["2025-11-05"]
+      items:
+        - description: "R6M X 12M X 375 PCS X 0.999/MT - CQ 5.5MM, REF NO:2025/10/009"
+          quantity: 6.0000 BDL
+          weight_mt: "6.0000"
+      total_quantity: "6.0000"
+      total_weight_mt: "6.0000"
+    metadata:
+      source_pdf: klang_valley_wire.pdf
+      status: HUMAN_REVIEWED
+      notes: Klang Valley Wire Sdn Bhd DO to Sudut Swasta / YPC Wong Construction
+
+  - name: klass_metal
+    inputs:
+      pdf_path: fixtures/delivery_orders/klass_metal.pdf
+    expected_output:
+      do_issuer_name: Klaas Metal Sdn. Bhd.
+      sold_to: Eng Soon Hardware Trading Sdn Bhd
+      sold_to_address: B-73, Jalan Sri Kemuning, Off Jalan Mentakab, 28000 Temerloh, Pahang Darul Makmur
+      delivered_to: C/O Hillhome Builder Sdn Bhd
+      delivered_to_address: "DEL: Site LOT 2091, Mukim Bentong, Pahang Darul Makmur"
+      do_number: ["I-2511/0163"]
+      po_number: [SC14/11/2025-012599]
+      vehicle_number: [SK2266E]
+      date: ["2025-11-27"]
+      items:
+        - description: R10 X 12M X 138PCS BS X 1.022/MT
+          quantity: 5.1100 MT
+          weight_mt: "5.1100"
+      total_quantity: 5.1100 MT
+      total_weight_mt: "5.1100"
+    metadata:
+      source_pdf: klass_metal.pdf
+      status: HUMAN_REVIEWED
+      notes: Klaas Metal Sdn Bhd DO to Eng Soon Hardware / Hillhome Builder
+
+  - name: uniwell_trading
+    inputs:
+      pdf_path: fixtures/delivery_orders/uniwell_trading.pdf
+    expected_output:
+      do_issuer_name: Uniwell Trading Enterprise Sdn Bhd
+      sold_to: Daniel
+      sold_to_address: Melaka Perdana, Melaka
+      do_number: ["2511/B0016"]
+      vehicle_number: [MDU5966]
+      date: ["2025-11-18"]
+      items:
+        - description: High Tensile Deformed Bar BS Y10 x 12m (138pcs/bdl)
+          quantity: "2"
+        - description: High Tensile Deformed Bar BS Y12 x 12m (96pcs/bdl)
+          quantity: "8"
+        - description: High Tensile Deformed Bar BS Y16 x 12m (54pcs/bdl)
+          quantity: "10"
+        - description: High Tensile Deformed Bar BS Y20 x 12m (34pcs/bdl)
+          quantity: "2"
+        - description: High Tensile Deformed Bar BS Y25 x 12m (22pcs/bdl)
+          quantity: "2"
+        - description: Mild Steel Round Bar R6 (6mm x 12m) (375pcs/bdl)
+          quantity: "1"
+      total_quantity: "25"
+    metadata:
+      source_pdf: uniwell_trading.pdf
+      status: HUMAN_REVIEWED
+      notes: Uniwell Trading Enterprise S/B temporary DO to Daniel, Melaka. Top Urgent. Alliance Steel source.
