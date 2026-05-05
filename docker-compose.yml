@@ -5,18 +5,37 @@ services:
     environment:
       - OPENAPI_OUTPUT_FILE=./shared-data/openapi.json
       - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/mydatabase
-      - TEST_DATABASE_URL=postgresql+asyncpg://postgres:password@db:5433/testdatabase
       - MAIL_SERVER=mailhog
+      - ACCESS_SECRET_KEY=${ACCESS_SECRET_KEY}
+      - RESET_PASSWORD_SECRET_KEY=${RESET_PASSWORD_SECRET_KEY}
+      - VERIFICATION_SECRET_KEY=${VERIFICATION_SECRET_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      - CHANDRA_API_KEY=${CHANDRA_API_KEY:-}
+      - HF_HOME=/root/.cache/huggingface
     ports:
       - "8000:8000"
     networks:
       - my_network
     volumes:
-      - ./fastapi_backend:/app
-      - fastapi-venv:/app/.venv
       - ./local-shared-data:/app/shared-data
+      - hf-cache:/root/.cache/huggingface
     depends_on:
       - db
+    develop:
+      watch:
+        - action: sync
+          path: ./fastapi_backend
+          target: /app
+          ignore:
+            - .venv/
+            - __pycache__/
+            - "*.pyc"
+        - action: rebuild
+          path: ./fastapi_backend/pyproject.toml
+        - action: rebuild
+          path: ./fastapi_backend/uv.lock
   db:
     image: postgres:17
     environment:
@@ -29,21 +48,9 @@ services:
       - my_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
-  db_test:
-    image: postgres:17
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: testdatabase
-    ports:
-      - "5433:5432"
-    networks:
-      - my_network
-    restart: always
   frontend:
     build:
       context: ./nextjs-frontend
-    user: node
     ports:
       - "3000:3000"
     networks:
@@ -53,9 +60,19 @@ services:
       API_BASE_URL: http://backend:8000
       OPENAPI_OUTPUT_FILE: ./shared-data/openapi.json
     volumes:
-      - ./nextjs-frontend:/app
-      - nextjs-node-modules:/app/node_modules
       - ./local-shared-data:/app/shared-data
+    develop:
+      watch:
+        - action: sync
+          path: ./nextjs-frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+        - action: rebuild
+          path: ./nextjs-frontend/package.json
+        - action: rebuild
+          path: ./nextjs-frontend/bun.lock
   mailhog:
     image: mailhog/mailhog
     ports:
@@ -66,8 +83,7 @@ services:
 
 volumes:
   postgres_data:
-  nextjs-node-modules:
-  fastapi-venv:
+  hf-cache:
 
 networks:
   my_network:

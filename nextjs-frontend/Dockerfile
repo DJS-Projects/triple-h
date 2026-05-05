@@ -1,24 +1,11 @@
-FROM node:20-bookworm
+FROM oven/bun:1
 
-# Set the working directory
 WORKDIR /app
 
-# Install pnpm globally
-RUN npm install -g pnpm
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
-# Copy package files and install dependencies
-COPY package*.json ./
-
-# Install dependencies as root (or myappuser, depending on your structure)
-RUN pnpm install
-
-## Switch to the non-root user
-USER node
-
-# Copy the rest of your application code
 COPY . .
 
 EXPOSE 3000
-
-# Start the application
-CMD ["./start.sh"]
+CMD ["bun", "run", "dev"]

@@ -103,11 +103,11 @@ run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run alembic revi
 
 [tasks."docker:up"]
 description = "Start all services via Docker Compose"
-run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -- docker compose up --build -d"
+run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build -d"
 
 [tasks."docker:watch"]
 description = "Start all services with file watch (foreground)"
-run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -- docker compose up --build --watch"
+run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build --watch"
 
 [tasks."docker:down"]
 description = "Stop all services"
