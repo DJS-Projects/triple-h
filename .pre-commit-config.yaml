@@ -27,3 +27,12 @@ repos:
         additional_dependencies: []
         args: [--ignore-missing-imports]
         files: ^fastapi_backend/
+
+  - repo: local
+    hooks:
+      - id: check-env-encrypted
+        name: Verify .env files encrypted with dotenvx
+        entry: python scripts/check_env_encrypted.py
+        language: system
+        pass_filenames: false
+        always_run: true
