@@ -32,7 +32,7 @@ repos:
     hooks:
       - id: check-env-encrypted
         name: Verify .env files encrypted with dotenvx
-        entry: python scripts/check_env_encrypted.py
+        entry: python3 scripts/check_env_encrypted.py
         language: system
         pass_filenames: false
         always_run: true
