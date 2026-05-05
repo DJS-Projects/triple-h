@@ -5,6 +5,7 @@ from .users import auth_backend, fastapi_users, AUTH_URL_PATH
 from fastapi.middleware.cors import CORSMiddleware
 from .utils import simple_generate_unique_route_id
 from app.routes.items import router as items_router
+from app.routes.extract import router as extract_router
 from app.config import settings
 
 app = FastAPI(
@@ -50,4 +51,8 @@ app.include_router(
 
 # Include items routes
 app.include_router(items_router, prefix="/items")
+
+# Document extraction (Chandra OCR)
+app.include_router(extract_router)
+
 add_pagination(app)

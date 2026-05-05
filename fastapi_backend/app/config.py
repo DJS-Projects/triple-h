@@ -30,5 +30,12 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: set[str] = {"*"}
 
+    GOOGLE_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
+    NVIDIA_NIM_API_KEY: str | None = None
+
+    CHANDRA_API_KEY: str | None = None
+    CHANDRA_API_BASE_URL: str = "https://www.datalab.to/api/v1"
+
 
 settings = Settings()  # type: ignore[call-arg]
