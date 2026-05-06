@@ -33,9 +33,14 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
     NVIDIA_NIM_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    DOUBLEWORD_API_KEY: str | None = None
 
     CHANDRA_API_KEY: str | None = None
     CHANDRA_API_BASE_URL: str = "https://www.datalab.to/api/v1"
+
+    LITELLM_BASE_URL: str = "http://litellm:4000"
+    LITELLM_MASTER_KEY: str = "sk-triple-h-dev-key"
 
 
 settings = Settings()  # type: ignore[call-arg]

@@ -12,7 +12,10 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
       - CHANDRA_API_KEY=${CHANDRA_API_KEY:-}
+      - LITELLM_BASE_URL=http://litellm:4000
       - HF_HOME=/root/.cache/huggingface
     ports:
       - "8000:8000"
@@ -23,6 +26,7 @@ services:
       - hf-cache:/root/.cache/huggingface
     depends_on:
       - db
+      - litellm
     develop:
       watch:
         - action: sync
@@ -36,6 +40,22 @@ services:
           path: ./fastapi_backend/pyproject.toml
         - action: rebuild
           path: ./fastapi_backend/uv.lock
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-triple-h-dev-key}
+    networks:
+      - my_network
   db:
     image: postgres:17
     environment:
