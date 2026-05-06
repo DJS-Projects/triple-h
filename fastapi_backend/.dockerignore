@@ -14,4 +14,4 @@ htmlcov/
 .env.local
 *.md
 tests/
-tests_eval/
+# tests_eval/ kept in image — schemas re-used by app.services.extraction
