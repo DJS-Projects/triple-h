@@ -14,9 +14,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen
 ENV PATH="/app/.venv/bin:$PATH"
 
-ENV HF_HOME=/root/.cache/huggingface
-RUN uv run python -c "from docling.document_converter import DocumentConverter; DocumentConverter()"
-
 COPY . .
 
 EXPOSE 8000

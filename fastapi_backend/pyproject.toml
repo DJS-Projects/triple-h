@@ -12,12 +12,16 @@ dependencies = [
     "pydantic-settings>=2.5.2,<3",
     "fastapi-mail>=1.4.1,<2",
     "fastapi-pagination==0.13.3",
-    "docling>=2.12,<3",
-    "torch>=2.4,<3",
-    "torchvision>=0.19,<1",
+    # Schema-only Docling dependency. Provides DoclingDocument, BoundingBox,
+    # ProvenanceItem, etc. We do NOT use the full `docling` pipeline (layout
+    # models / OCR / TableFormer) — Chandra (via datalab SDK) supplies all
+    # OCR + structure, and our adapter maps it to DoclingDocument.
+    "docling-core>=2.74,<3",
     "pydantic-ai-slim[openai,google]>=1.80.0,<2",
     "pydantic-graph>=1.80.0,<2",
     "pdf2image>=1.17,<2",
+    # Official Datalab (Chandra OCR) SDK — handles auth, polling, retries.
+    "datalab-python-sdk>=0.5.0,<1",
 ]
 
 [dependency-groups]

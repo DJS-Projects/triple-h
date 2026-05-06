@@ -1,17 +1,23 @@
 """Multimodal extraction pipeline.
 
-PDF → (Chandra OCR ∥ pdf2image) → Pydantic AI multimodal agent → typed JSON.
+Single-pass:
+  bytes
+    → Chandra `convert(mode=accurate, output_format=chunks)` (one API call)
+    → DoclingDocument (canonical IR with bbox provenance)
+    → multimodal LLM (markdown + page images via LiteLLM)
+    → typed JSON
 
-LLM call routed via LiteLLM proxy (LITELLM_BASE_URL). Provider/model selection
-is a virtual name from litellm/config.yaml — backend doesn't pick provider
-directly; LiteLLM does fallback/retry.
+LLM call routed via the LiteLLM proxy (`LITELLM_BASE_URL`). Provider/model
+selection is a virtual name from `litellm/config.yaml` — the backend
+doesn't pick a provider directly; LiteLLM handles fallback/retry.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from io import BytesIO
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pdf2image import convert_from_bytes
 from pydantic import BaseModel
@@ -20,10 +26,20 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
-from app.services.chandra import convert_document
+from app.services.chandra_ocr import convert_bytes_with_chunks_async
+from app.services.docling_adapter import chunks_to_docling_document
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
 
+_log = logging.getLogger(__name__)
+
 DocType = Literal["delivery_order", "weighing_bill", "invoice", "petrol_bill"]
+
+# Vision providers cap how many images per request:
+#   Groq Llama-4-Scout: 5
+#   NVIDIA NIM Llama-3.2-90B-Vision: 1
+# Cap conservatively so the primary model always works; multi-page docs lean
+# on the markdown view (still complete) for context beyond the first pages.
+_MAX_IMAGES_PER_REQUEST = 5
 
 _SCHEMA_BY_TYPE: dict[DocType, type[BaseModel]] = {
     "delivery_order": DeliveryOrder,
@@ -72,7 +88,6 @@ def _build_agent(virtual_model: str, output_type: type[T]) -> Agent[None, T]:
 
 
 def _is_vision_model(model_name: str) -> bool:
-    """Heuristic: vision-capable virtual models start with 'vision-'."""
     return model_name.startswith("vision-")
 
 
@@ -93,15 +108,26 @@ async def extract_structured(
     doc_type: DocType,
     model: str = "vision-primary",
     dpi: int = 150,
-) -> dict:
-    """Run Chandra + pdf2image in parallel, then multimodal LLM via LiteLLM.
+) -> dict[str, Any]:
+    """One Chandra call + (optional) page images → multimodal LLM → typed JSON.
 
-    Returns dict with `markdown`, `extracted` (typed schema as dict), `model_used`.
+    Returns:
+        {
+          "doc_type":       requested type,
+          "model":          LiteLLM virtual model used,
+          "page_count":     total pages,
+          "extracted":      typed schema instance dumped to dict,
+          "markdown":       Chandra-derived markdown (LLM-friendly view),
+          "docling_doc":    canonical DoclingDocument as dict,
+          "checkpoint_id":  Chandra checkpoint id (None if save failed),
+        }
     """
     schema = _SCHEMA_BY_TYPE[doc_type]
     prompt_intro = _PROMPT_BY_TYPE[doc_type]
 
-    chandra_task = asyncio.create_task(convert_document(pdf_bytes, filename))
+    chandra_task = asyncio.create_task(
+        convert_bytes_with_chunks_async(pdf_bytes, filename)
+    )
     if _is_vision_model(model):
         pages_task = asyncio.create_task(_render_pages(pdf_bytes, dpi))
         chandra_result, page_pngs = await asyncio.gather(chandra_task, pages_task)
@@ -109,18 +135,42 @@ async def extract_structured(
         chandra_result = await chandra_task
         page_pngs = []
 
+    if not chandra_result.success:
+        raise RuntimeError(f"Chandra convert failed: {chandra_result.error}")
+
+    docling_doc = chunks_to_docling_document(
+        chandra_result.chunks,
+        name=filename,
+        page_count=chandra_result.page_count,
+    )
+    docling_dict = docling_doc.export_to_dict(
+        mode="json", exclude_none=True, coord_precision=2
+    )
+    # Chunks mode does not populate the SDK's `.markdown` field; derive an
+    # LLM-friendly view from the DoclingDocument so we keep one source of truth.
+    markdown_view = docling_doc.export_to_markdown()
+
     agent = _build_agent(model, schema)
+    capped_pngs = page_pngs[:_MAX_IMAGES_PER_REQUEST]
+    if len(page_pngs) > len(capped_pngs):
+        _log.info(
+            "Capping %d page images to %d (provider image limit)",
+            len(page_pngs),
+            len(capped_pngs),
+        )
     user_message: list = [
         prompt_intro,
-        f"\nChandra OCR markdown:\n\n{chandra_result.markdown}",
-        *page_pngs,
+        f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{markdown_view}",
+        *capped_pngs,
     ]
     run = await agent.run(user_message)
 
     return {
-        "markdown": chandra_result.markdown,
+        "doc_type": doc_type,
+        "model": model,
         "page_count": chandra_result.page_count,
         "extracted": run.output.model_dump(),
-        "model": model,
-        "doc_type": doc_type,
+        "markdown": markdown_view,
+        "docling_doc": docling_dict,
+        "checkpoint_id": chandra_result.checkpoint_id,
     }

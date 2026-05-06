@@ -1,8 +1,8 @@
 """Document extraction routes.
 
-POST /extract             — Chandra OCR only, returns markdown.
-POST /extract/structured  — Chandra + multimodal LLM via LiteLLM proxy,
-                            returns typed JSON for the requested doc type.
+POST /extract             — Chandra OCR only (markdown / html / chunks).
+POST /extract/structured  — Chandra + multimodal LLM via LiteLLM proxy;
+                            returns typed JSON + DoclingDocument IR.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from app.services.chandra import ChandraAPIError, convert_document
+from app.services.chandra_ocr import convert_bytes_with_chunks_async
 from app.services.extraction import DocType, extract_structured
 
 router = APIRouter(tags=["extract"])
@@ -23,7 +23,8 @@ class ExtractResponse(BaseModel):
     page_count: int | None
     markdown: str
     html: str | None = None
-    json_data: dict[str, Any] | None = None
+    chunks: dict[str, Any] | None = None
+    checkpoint_id: str | None = None
 
 
 class StructuredExtractResponse(BaseModel):
@@ -33,20 +34,18 @@ class StructuredExtractResponse(BaseModel):
     page_count: int | None
     extracted: dict[str, Any]
     markdown: str
+    docling_doc: dict[str, Any]
+    checkpoint_id: str | None = None
 
 
 @router.post("/extract", response_model=ExtractResponse)
 async def extract_document(
     file: Annotated[UploadFile, File(description="PDF or image file")],
-    output_format: Annotated[str, Form()] = "markdown",
-    use_llm: Annotated[bool, Form()] = False,
-    langs: Annotated[str | None, Form()] = None,
 ) -> ExtractResponse:
-    """Submit a document to Chandra OCR via datalab.to and return parsed output.
+    """Run Chandra `convert(mode=accurate, output_format=chunks)` and return raw chunks + markdown.
 
-    output_format: "markdown" (default), "html", "json", or "chunks"
-    use_llm: Enable LLM post-processing (slower, more accurate, more expensive)
-    langs: Comma-separated language hints (e.g. "English,Malay")
+    The structured `chunks` payload carries per-block bbox/polygon/block_type;
+    use it directly when you need the raw OCR layout without typed extraction.
     """
     if file.filename is None:
         raise HTTPException(status_code=400, detail="missing filename")
@@ -56,22 +55,22 @@ async def extract_document(
         raise HTTPException(status_code=400, detail="empty file")
 
     try:
-        result = await convert_document(
-            file_bytes,
-            file.filename,
-            output_format=output_format,
-            use_llm=use_llm,
-            langs=langs,
+        result = await convert_bytes_with_chunks_async(file_bytes, file.filename)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"chandra: {exc}") from exc
+
+    if not result.success:
+        raise HTTPException(
+            status_code=502, detail=f"chandra: {result.error or 'unknown error'}"
         )
-    except ChandraAPIError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return ExtractResponse(
         filename=file.filename,
         page_count=result.page_count,
-        markdown=result.markdown,
+        markdown=result.markdown or "",
         html=result.html,
-        json_data=result.json_data,
+        chunks=result.chunks if isinstance(result.chunks, dict) else None,
+        checkpoint_id=result.checkpoint_id,
     )
 
 
@@ -85,12 +84,12 @@ async def extract_document_structured(
     model: Annotated[
         str,
         Form(
-            description="LiteLLM virtual model name (vision-primary, vision-fallback-1, etc.)"
+            description="LiteLLM virtual model name (vision-primary, vision-fallback-1, ...)"
         ),
     ] = "vision-primary",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
 ) -> StructuredExtractResponse:
-    """Multimodal extraction: Chandra OCR + page images → LLM via LiteLLM → typed JSON."""
+    """Chandra (chunks → DoclingDocument) + page images → LLM → typed JSON."""
     if file.filename is None:
         raise HTTPException(status_code=400, detail="missing filename")
 
@@ -106,9 +105,15 @@ async def extract_document_structured(
             model=model,
             dpi=dpi,
         )
-    except ChandraAPIError as exc:
-        raise HTTPException(status_code=502, detail=f"chandra: {exc}") from exc
-    except Exception as exc:  # LiteLLM/agent failures
+    except RuntimeError as exc:
+        # Only RuntimeError raised by extract_structured itself signals
+        # Chandra failure (we raise it explicitly). Other exceptions bubble
+        # from the LLM agent or the SDK.
+        msg = str(exc)
+        if msg.startswith("Chandra"):
+            raise HTTPException(status_code=502, detail=f"chandra: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"llm: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"llm: {exc}") from exc
 
     return StructuredExtractResponse(
@@ -118,4 +123,6 @@ async def extract_document_structured(
         page_count=result["page_count"],
         extracted=result["extracted"],
         markdown=result["markdown"],
+        docling_doc=result["docling_doc"],
+        checkpoint_id=result["checkpoint_id"],
     )
