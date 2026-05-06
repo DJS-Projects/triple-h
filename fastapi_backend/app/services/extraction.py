@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Literal, TypeVar
 
@@ -91,13 +93,45 @@ def _is_vision_model(model_name: str) -> bool:
     return model_name.startswith("vision-")
 
 
-async def _render_pages(pdf_bytes: bytes, dpi: int) -> list[BinaryContent]:
+@dataclass(frozen=True)
+class RenderedPage:
+    """One PDF page rasterised to PNG bytes plus its pixel size."""
+
+    page_no: int  # 1-indexed
+    width_px: int
+    height_px: int
+    png_bytes: bytes
+
+
+@dataclass
+class ExtractionPipelineResult:
+    """Everything the route + persistence layer need from one pipeline run."""
+
+    doc_type: DocType
+    model: str
+    page_count: int | None
+    extracted: dict[str, Any]
+    markdown: str
+    docling_doc: dict[str, Any]
+    checkpoint_id: str | None
+    duration_ms: int
+    pages: list[RenderedPage]
+
+
+async def _render_pages(pdf_bytes: bytes, dpi: int) -> list[RenderedPage]:
     images = await asyncio.to_thread(convert_from_bytes, pdf_bytes, dpi=dpi)
-    out: list[BinaryContent] = []
-    for img in images:
+    out: list[RenderedPage] = []
+    for idx, img in enumerate(images, start=1):
         buf = BytesIO()
         img.save(buf, format="PNG")
-        out.append(BinaryContent(data=buf.getvalue(), media_type="image/png"))
+        out.append(
+            RenderedPage(
+                page_no=idx,
+                width_px=img.width,
+                height_px=img.height,
+                png_bytes=buf.getvalue(),
+            )
+        )
     return out
 
 
@@ -108,32 +142,24 @@ async def extract_structured(
     doc_type: DocType,
     model: str = "vision-primary",
     dpi: int = 150,
-) -> dict[str, Any]:
-    """One Chandra call + (optional) page images → multimodal LLM → typed JSON.
+) -> ExtractionPipelineResult:
+    """One Chandra call + page render + LLM call → typed result.
 
-    Returns:
-        {
-          "doc_type":       requested type,
-          "model":          LiteLLM virtual model used,
-          "page_count":     total pages,
-          "extracted":      typed schema instance dumped to dict,
-          "markdown":       Chandra-derived markdown (LLM-friendly view),
-          "docling_doc":    canonical DoclingDocument as dict,
-          "checkpoint_id":  Chandra checkpoint id (None if save failed),
-        }
+    Pages are always rendered (regardless of model) so the persistence layer
+    can cache them — this is what powers fast bbox overlays in the review UI.
+    The LLM only receives images when the model is vision-capable.
     """
     schema = _SCHEMA_BY_TYPE[doc_type]
     prompt_intro = _PROMPT_BY_TYPE[doc_type]
 
+    overall_start = time.perf_counter()
+
+    # Always render pages — needed for the review UI even on text-only models.
     chandra_task = asyncio.create_task(
         convert_bytes_with_chunks_async(pdf_bytes, filename)
     )
-    if _is_vision_model(model):
-        pages_task = asyncio.create_task(_render_pages(pdf_bytes, dpi))
-        chandra_result, page_pngs = await asyncio.gather(chandra_task, pages_task)
-    else:
-        chandra_result = await chandra_task
-        page_pngs = []
+    pages_task = asyncio.create_task(_render_pages(pdf_bytes, dpi))
+    chandra_result, rendered_pages = await asyncio.gather(chandra_task, pages_task)
 
     if not chandra_result.success:
         raise RuntimeError(f"Chandra convert failed: {chandra_result.error}")
@@ -150,27 +176,36 @@ async def extract_structured(
     # LLM-friendly view from the DoclingDocument so we keep one source of truth.
     markdown_view = docling_doc.export_to_markdown()
 
+    if _is_vision_model(model):
+        capped = rendered_pages[:_MAX_IMAGES_PER_REQUEST]
+        if len(rendered_pages) > len(capped):
+            _log.info(
+                "Capping %d page images to %d (provider image limit)",
+                len(rendered_pages),
+                len(capped),
+            )
+        llm_images = [
+            BinaryContent(data=p.png_bytes, media_type="image/png") for p in capped
+        ]
+    else:
+        llm_images = []
+
     agent = _build_agent(model, schema)
-    capped_pngs = page_pngs[:_MAX_IMAGES_PER_REQUEST]
-    if len(page_pngs) > len(capped_pngs):
-        _log.info(
-            "Capping %d page images to %d (provider image limit)",
-            len(page_pngs),
-            len(capped_pngs),
-        )
     user_message: list = [
         prompt_intro,
         f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{markdown_view}",
-        *capped_pngs,
+        *llm_images,
     ]
     run = await agent.run(user_message)
 
-    return {
-        "doc_type": doc_type,
-        "model": model,
-        "page_count": chandra_result.page_count,
-        "extracted": run.output.model_dump(),
-        "markdown": markdown_view,
-        "docling_doc": docling_dict,
-        "checkpoint_id": chandra_result.checkpoint_id,
-    }
+    return ExtractionPipelineResult(
+        doc_type=doc_type,
+        model=model,
+        page_count=chandra_result.page_count,
+        extracted=run.output.model_dump(),
+        markdown=markdown_view,
+        docling_doc=docling_dict,
+        checkpoint_id=chandra_result.checkpoint_id,
+        duration_ms=int((time.perf_counter() - overall_start) * 1000),
+        pages=rendered_pages,
+    )

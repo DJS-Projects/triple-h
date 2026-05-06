@@ -17,6 +17,8 @@ services:
       - CHANDRA_API_KEY=${CHANDRA_API_KEY:-}
       - LITELLM_BASE_URL=http://litellm:4000
       - HF_HOME=/root/.cache/huggingface
+      - BLOB_BACKEND=${BLOB_BACKEND:-local}
+      - BLOB_LOCAL_PATH=${BLOB_LOCAL_PATH:-/data/blobs}
     ports:
       - "8000:8000"
     networks:
@@ -24,6 +26,7 @@ services:
     volumes:
       - ./local-shared-data:/app/shared-data
       - hf-cache:/root/.cache/huggingface
+      - blob_data:/data/blobs
     depends_on:
       - db
       - litellm
@@ -104,6 +107,7 @@ services:
 volumes:
   postgres_data:
   hf-cache:
+  blob_data:
 
 networks:
   my_network:

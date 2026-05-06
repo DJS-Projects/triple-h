@@ -1,19 +1,26 @@
 """Document extraction routes.
 
-POST /extract             — Chandra OCR only (markdown / html / chunks).
-POST /extract/structured  — Chandra + multimodal LLM via LiteLLM proxy;
-                            returns typed JSON + DoclingDocument IR.
+POST /extract             — Chandra OCR only (no DB write).
+POST /extract/structured  — Full pipeline: Chandra + page render + LLM →
+                            persists Document, DocumentPage[], ExtractionRun
+                            and returns the run id + payload.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_async_session
+from app.models import User
+from app.services import persistence
+from app.services.blob_store import BlobStore, get_blob_store
 from app.services.chandra_ocr import convert_bytes_with_chunks_async
 from app.services.extraction import DocType, extract_structured
+from app.users import current_active_user
 
 router = APIRouter(tags=["extract"])
 
@@ -28,25 +35,29 @@ class ExtractResponse(BaseModel):
 
 
 class StructuredExtractResponse(BaseModel):
+    document_id: str
+    extraction_run_id: int
+    is_new_document: bool
     filename: str
     doc_type: Literal["delivery_order", "weighing_bill", "invoice", "petrol_bill"]
     model: str
     page_count: int | None
+    duration_ms: int
     extracted: dict[str, Any]
     markdown: str
     docling_doc: dict[str, Any]
     checkpoint_id: str | None = None
 
 
+def _blob_store() -> BlobStore:
+    return get_blob_store()
+
+
 @router.post("/extract", response_model=ExtractResponse)
 async def extract_document(
     file: Annotated[UploadFile, File(description="PDF or image file")],
 ) -> ExtractResponse:
-    """Run Chandra `convert(mode=accurate, output_format=chunks)` and return raw chunks + markdown.
-
-    The structured `chunks` payload carries per-block bbox/polygon/block_type;
-    use it directly when you need the raw OCR layout without typed extraction.
-    """
+    """Chandra-only path: returns raw chunks + markdown without persisting."""
     if file.filename is None:
         raise HTTPException(status_code=400, detail="missing filename")
 
@@ -88,14 +99,26 @@ async def extract_document_structured(
         ),
     ] = "vision-primary",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+    blob_store: BlobStore = Depends(_blob_store),
 ) -> StructuredExtractResponse:
-    """Chandra (chunks → DoclingDocument) + page images → LLM → typed JSON."""
+    """Persist the upload, run the pipeline, persist the run, return ids."""
     if file.filename is None:
         raise HTTPException(status_code=400, detail="missing filename")
 
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="empty file")
+
+    document, is_new = await persistence.ingest_document(
+        session,
+        blob_store=blob_store,
+        file_bytes=file_bytes,
+        filename=file.filename,
+        mime_type=file.content_type or "application/pdf",
+        uploaded_by=user.id,
+    )
 
     try:
         result = await extract_structured(
@@ -106,9 +129,8 @@ async def extract_document_structured(
             dpi=dpi,
         )
     except RuntimeError as exc:
-        # Only RuntimeError raised by extract_structured itself signals
-        # Chandra failure (we raise it explicitly). Other exceptions bubble
-        # from the LLM agent or the SDK.
+        # Pipeline raises RuntimeError for Chandra failures; LLM failures
+        # bubble up as the SDK's own exception types.
         msg = str(exc)
         if msg.startswith("Chandra"):
             raise HTTPException(status_code=502, detail=f"chandra: {exc}") from exc
@@ -116,13 +138,40 @@ async def extract_document_structured(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"llm: {exc}") from exc
 
+    await persistence.record_pages(
+        session,
+        blob_store=blob_store,
+        document=document,
+        pages=[(p.page_no, p.width_px, p.height_px, p.png_bytes) for p in result.pages],
+    )
+
+    extraction_payload = {
+        "extracted": result.extracted,
+        "markdown": result.markdown,
+        "docling_doc": result.docling_doc,
+    }
+    run = await persistence.record_extraction_run(
+        session,
+        document=document,
+        doc_type=result.doc_type,
+        llm_model=result.model,
+        checkpoint_id=result.checkpoint_id,
+        duration_ms=result.duration_ms,
+        payload=extraction_payload,
+    )
+    await session.commit()
+
     return StructuredExtractResponse(
-        filename=file.filename,
-        doc_type=result["doc_type"],
-        model=result["model"],
-        page_count=result["page_count"],
-        extracted=result["extracted"],
-        markdown=result["markdown"],
-        docling_doc=result["docling_doc"],
-        checkpoint_id=result["checkpoint_id"],
+        document_id=str(document.document_id),
+        extraction_run_id=run.extraction_run_id,
+        is_new_document=is_new,
+        filename=document.filename,
+        doc_type=result.doc_type,
+        model=result.model,
+        page_count=result.page_count,
+        duration_ms=result.duration_ms,
+        extracted=result.extracted,
+        markdown=result.markdown,
+        docling_doc=result.docling_doc,
+        checkpoint_id=result.checkpoint_id,
     )
