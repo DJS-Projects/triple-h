@@ -61,6 +61,17 @@ def _flatten_scalars(
 
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_BLOCK_ID_PAGE_RE = re.compile(r"^/page/(\d+)/")
+
+
+def page_no_for_block_id(block_id: str) -> int | None:
+    """Parse 1-indexed page number out of a Chandra block id (`/page/N/...`).
+
+    Chandra block IDs encode the page directly; this is cheaper and more
+    reliable than re-walking the chunks to look up a block by id.
+    """
+    m = _BLOCK_ID_PAGE_RE.match(block_id)
+    return int(m.group(1)) + 1 if m else None
 
 
 def _block_text(block: dict[str, Any]) -> str:
@@ -118,3 +129,22 @@ def compute_field_anchors(
         anchors[path] = candidates[0][1]
 
     return anchors
+
+
+def compute_field_pages(
+    extracted: dict[str, Any],
+    chandra_chunks: dict[str, Any],
+) -> dict[str, int]:
+    """Return `{field_path: page_no_1indexed}` for every anchored scalar.
+
+    Computes anchors across all pages (no filter), then projects each
+    anchor's block_id to its source page. Fields with no anchor are
+    omitted from the result — the FE treats those as document-level.
+    """
+    anchors = compute_field_anchors(extracted, chandra_chunks)
+    out: dict[str, int] = {}
+    for path, bid in anchors.items():
+        page = page_no_for_block_id(bid)
+        if page is not None:
+            out[path] = page
+    return out

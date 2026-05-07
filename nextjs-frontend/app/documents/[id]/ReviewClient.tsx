@@ -56,6 +56,7 @@ interface DocumentDetail {
 		is_current: boolean;
 		created_at: string;
 		extracted_view: Record<string, unknown>;
+		field_pages: Record<string, number>;
 		reviews: Array<{
 			field_path: string;
 			edited_value: unknown;
@@ -103,6 +104,26 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 				: { scalars: [], tables: [] },
 		[run],
 	);
+
+	// Path A: split scalars into current-page vs doc-level using server-provided
+	// field_pages. The BE flattens arrays with [i] indexing, but splitExtraction
+	// unwraps len-1 arrays to bare keys — so probe both `path` and `path[0]`.
+	const fieldPages = run?.field_pages ?? {};
+	const pageForPath = (path: string): number | undefined =>
+		fieldPages[path] ?? fieldPages[`${path}[0]`];
+
+	const { pageScalars, docScalars } = useMemo(() => {
+		const onPage: KvpRow[] = [];
+		const docLevel: KvpRow[] = [];
+		for (const row of split.scalars) {
+			const p = pageForPath(row.path);
+			if (p === pageNo) onPage.push(row);
+			else if (p === undefined) docLevel.push(row);
+			// rows anchored to a different page are hidden on this page
+		}
+		return { pageScalars: onPage, docScalars: docLevel };
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [split.scalars, fieldPages, pageNo]);
 
 	const dirty = Object.keys(draft).length > 0;
 
@@ -216,31 +237,70 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 				</section>
 
 				<section className="flex flex-col gap-6">
-					<div className="flex flex-col gap-3">
-						<h2 className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
-							Extracted fields
-						</h2>
-						{run ? (
-							<KvpTable
-								rows={split.scalars}
-								draft={draft}
-								onChange={(path, raw) =>
-									setDraft((d) => ({ ...d, [path]: raw }))
-								}
-								remark={remark}
-								onRemark={(path, txt) =>
-									setRemark((r) => ({ ...r, [path]: txt }))
-								}
-								onHoverField={setHoveredField}
-								highlightedField={highlightedFieldPath}
-								anchors={anchors}
-							/>
-						) : (
-							<p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-								No extraction yet.
-							</p>
-						)}
-					</div>
+					{run ? (
+						<>
+							<div className="flex flex-col gap-3">
+								<h2 className="flex items-baseline gap-2 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+									<span>On page {pageNo}</span>
+									<span className="text-[10px] text-ink-mute">
+										({pageScalars.length})
+									</span>
+								</h2>
+								{pageScalars.length > 0 ? (
+									<KvpTable
+										rows={pageScalars}
+										draft={draft}
+										onChange={(path, raw) =>
+											setDraft((d) => ({ ...d, [path]: raw }))
+										}
+										remark={remark}
+										onRemark={(path, txt) =>
+											setRemark((r) => ({ ...r, [path]: txt }))
+										}
+										onHoverField={setHoveredField}
+										highlightedField={highlightedFieldPath}
+										anchors={anchors}
+									/>
+								) : (
+									<p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+										No fields anchored to this page.
+									</p>
+								)}
+							</div>
+
+							{docScalars.length > 0 ? (
+								<div className="flex flex-col gap-3">
+									<h2 className="flex items-baseline gap-2 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
+										<span>Document-level</span>
+										<span
+											className="text-[10px] text-ink-mute"
+											title="Fields the auto-anchor heuristic could not place on a specific page"
+										>
+											({docScalars.length}, unanchored)
+										</span>
+									</h2>
+									<KvpTable
+										rows={docScalars}
+										draft={draft}
+										onChange={(path, raw) =>
+											setDraft((d) => ({ ...d, [path]: raw }))
+										}
+										remark={remark}
+										onRemark={(path, txt) =>
+											setRemark((r) => ({ ...r, [path]: txt }))
+										}
+										onHoverField={setHoveredField}
+										highlightedField={highlightedFieldPath}
+										anchors={anchors}
+									/>
+								</div>
+							) : null}
+						</>
+					) : (
+						<p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+							No extraction yet.
+						</p>
+					)}
 
 					{split.tables.map((t) => (
 						<LineTable key={t.path} table={t} />

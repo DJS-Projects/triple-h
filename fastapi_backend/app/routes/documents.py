@@ -77,6 +77,7 @@ class ExtractionRunPayload(BaseModel):
     is_current: bool
     created_at: str
     extracted_view: dict[str, Any]
+    field_pages: dict[str, int]
     reviews: list[FieldReviewSummary]
 
 
@@ -152,12 +153,18 @@ async def list_documents(
 
 
 async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPayload:
+    from app.services.field_anchors import compute_field_pages
+
     reviews = await persistence.latest_reviews_by_path(session, run.extraction_run_id)
     edits = {path: r.edited_value for path, r in reviews.items()}
     extracted_base = run.payload.get("extracted", {}) if run.payload else {}
     extracted_view = (
         apply_overlay(extracted_base, edits) if edits else dict(extracted_base)
     )
+    chunks = run.payload.get("chandra_chunks") if run.payload else None
+    # Anchored scalars get a 1-indexed page; unanchored scalars are
+    # treated as document-level on the FE.
+    field_pages = compute_field_pages(extracted_view, chunks) if chunks else {}
     review_list = [
         FieldReviewSummary(
             field_path=r.field_path,
@@ -178,6 +185,7 @@ async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPa
         is_current=run.is_current,
         created_at=run.created_at.isoformat(),
         extracted_view=extracted_view,
+        field_pages=field_pages,
         reviews=review_list,
     )
 

@@ -138,6 +138,37 @@ export type BearerResponse = {
 };
 
 /**
+ * BlockOverlay
+ * One Chandra block, projected to render-image pixel coords.
+ *
+ * `quad` is a 4-point polygon in the same coord system as the page
+ * PNG returned by `/pages/{n}.png` — the FE can position absolutely
+ * over the image without any further scaling.
+ */
+export type BlockOverlay = {
+    /**
+     * Block Id
+     */
+    block_id: string;
+    /**
+     * Block Type
+     */
+    block_type: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Quad
+     */
+    quad: Array<Array<number>>;
+    /**
+     * Bbox
+     */
+    bbox: Array<number>;
+};
+
+/**
  * Body_auth-reset:forgot_password
  */
 export type BodyAuthResetForgotPassword = {
@@ -320,10 +351,10 @@ export type ExtractResponse = {
  * ExtractionRunPayload
  * API-facing slice of an extraction run.
  *
- * The raw `extraction_run.payload` blob (which carries `docling_doc`)
- * stays in the database; the API only exposes the projections the UI
- * actually consumes: structured `extracted_view` (KVPs after overlay)
- * and the `html` reconstruction (visual layer).
+ * The raw `extraction_run.payload` blob (docling_doc + markdown) stays
+ * in the database for replay; the API only exposes `extracted_view`
+ * (KVPs after overlay). Visual layer is served via separate page-image
+ * + OCR-overlay routes.
  */
 export type ExtractionRunPayload = {
     /**
@@ -365,9 +396,11 @@ export type ExtractionRunPayload = {
         [key: string]: unknown;
     };
     /**
-     * Html
+     * Field Pages
      */
-    html: string | null;
+    field_pages: {
+        [key: string]: number;
+    };
     /**
      * Reviews
      */
@@ -426,6 +459,42 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * PageBlocksResponse
+ */
+export type PageBlocksResponse = {
+    /**
+     * Page No
+     */
+    page_no: number;
+    /**
+     * Width Px
+     */
+    width_px: number;
+    /**
+     * Height Px
+     */
+    height_px: number;
+    /**
+     * Source Width
+     */
+    source_width: number | null;
+    /**
+     * Source Height
+     */
+    source_height: number | null;
+    /**
+     * Blocks
+     */
+    blocks: Array<BlockOverlay>;
+    /**
+     * Field Anchors
+     */
+    field_anchors: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -561,10 +630,10 @@ export type RefinementResult = {
  * StructuredExtractResponse
  * API-facing payload for `/extract/structured`.
  *
- * Intentionally omits `docling_doc` (kept in DB only) and `markdown`
- * (raw OCR view, not for end users). The `html` projection is the
- * canonical visual rendering for the review UI; `extracted` is the
- * constrained-decoded JSON for the KVP table.
+ * Intentionally omits `docling_doc` and `markdown` (kept in DB for
+ * replay/eval, not surfaced to the UI). `extracted` is the
+ * constrained-decoded JSON for the KVP table. The visual layer is
+ * served separately via the page-image + OCR-overlay routes.
  */
 export type StructuredExtractResponse = {
     /**
@@ -605,10 +674,6 @@ export type StructuredExtractResponse = {
     extracted: {
         [key: string]: unknown;
     };
-    /**
-     * Html
-     */
-    html: string;
     /**
      * Checkpoint Id
      */
@@ -1286,6 +1351,40 @@ export type DocumentsGetDocumentPagePngResponses = {
     200: unknown;
 };
 
+export type DocumentsGetDocumentPageBlocksData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Page No
+         */
+        page_no: number;
+    };
+    query?: never;
+    url: '/documents/{document_id}/pages/{page_no}/blocks';
+};
+
+export type DocumentsGetDocumentPageBlocksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DocumentsGetDocumentPageBlocksError = DocumentsGetDocumentPageBlocksErrors[keyof DocumentsGetDocumentPageBlocksErrors];
+
+export type DocumentsGetDocumentPageBlocksResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageBlocksResponse;
+};
+
+export type DocumentsGetDocumentPageBlocksResponse = DocumentsGetDocumentPageBlocksResponses[keyof DocumentsGetDocumentPageBlocksResponses];
+
 export type DocumentsGetDocumentPageAnnotatedData = {
     body?: never;
     path: {
@@ -1355,5 +1454,5 @@ export type RefineRefineExtractionResponses = {
 export type RefineRefineExtractionResponse = RefineRefineExtractionResponses[keyof RefineRefineExtractionResponses];
 
 export type ClientOptions = {
-    baseURL: `${string}://openapi.json` | (string & {});
+    baseURL: `${string}://${string}` | (string & {});
 };
