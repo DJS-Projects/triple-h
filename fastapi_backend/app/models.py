@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models.
 
-User/Item are pre-existing fastapi-users + template tables and stay on the
-legacy 1.x `Column(...)` style. Document/DocumentPage/ExtractionRun/FieldReview
+User is the pre-existing fastapi-users table and stays on the legacy 1.x
+`Column(...)` style. Document/DocumentPage/ExtractionRun/FieldReview/RefinementRun
 are the new domain tables and use the modern 2.x `Mapped[...] / mapped_column`
 style. Both styles share the same `Base`.
 
@@ -22,14 +22,12 @@ from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
     Identity,
     Index,
     Integer,
-    String,
     Text,
     func,
 )
@@ -52,25 +50,12 @@ class Base(DeclarativeBase):
 
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
-    items = relationship("Item", back_populates="user", cascade="all, delete-orphan")
     documents = relationship(
         "Document",
         back_populates="uploader",
         cascade="save-update, merge",
         passive_deletes=True,
     )
-
-
-class Item(Base):
-    __tablename__ = "items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
-    description = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id"), nullable=False)
-
-    user = relationship("User", back_populates="items")
 
 
 # ---------------------------------------------------------------------------

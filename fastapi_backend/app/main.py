@@ -4,7 +4,6 @@ from .schemas import UserCreate, UserRead, UserUpdate
 from .users import auth_backend, fastapi_users, AUTH_URL_PATH
 from fastapi.middleware.cors import CORSMiddleware
 from .utils import simple_generate_unique_route_id
-from app.routes.items import router as items_router
 from app.routes.extract import router as extract_router
 from app.routes.documents import router as documents_router
 from app.routes.refine import router as refine_router
@@ -50,9 +49,6 @@ app.include_router(
     prefix="/users",
     tags=["users"],
 )
-
-# Include items routes
-app.include_router(items_router, prefix="/items")
 
 # Document extraction + persistence
 app.include_router(extract_router)
