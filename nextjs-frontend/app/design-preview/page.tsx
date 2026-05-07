@@ -3,6 +3,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 
+import refinementFixture from "@/lib/fixtures/refinement-run-2.json";
+
 /**
  * Greybox wireframe for the document review screen.
  *
@@ -200,7 +202,8 @@ export default function DesignPreviewPage() {
 				</section>
 			</main>
 
-			<section className="px-8 pb-10">
+			<section className="space-y-6 px-8 pb-10">
+				<RefinementPanel />
 				<Wireframe label="Audit · placeholder">
 					<div className="grid h-24 place-items-center text-[11px] text-slate-300">
 						audit timeline goes here
@@ -529,4 +532,192 @@ function StatusTag({ status }: { status: FieldStatus }) {
 
 function countByStatus(rows: FieldRow[], status: FieldStatus): number {
 	return rows.filter((r) => r.status === status).length;
+}
+
+/* ── Refinement panel — VLM (Gemma 4) output via DSPy / ARQ ──────────
+ *
+ * Reads a frozen fixture pulled from a real `POST /refine/2` call and
+ * surfaces what the VLM produced:
+ *   • header — model + prompt_version + duration_ms (the observability)
+ *   • discrepancies callout — the most actionable signal
+ *   • patches table — assign/reject ops with confidence + reason
+ *   • collapsible visual_audit + scaffold_match (the ARQ trace)
+ *
+ * Live wiring will swap the JSON import for an authenticated fetch
+ * against `GET /refine/{extraction_run_id}/current`. Shape stays
+ * identical so the component doesn't change.
+ */
+interface RefinementPatch {
+	op: "assign" | "add" | "reject" | "move";
+	fragment_id: string | null;
+	field_key: string | null;
+	new_bbox: unknown;
+	new_text: string | null;
+	reason: string;
+	confidence: number;
+}
+
+interface RefinementFixture {
+	refinement_run_id: number;
+	extraction_run_id: number;
+	vlm_model: string;
+	prompt_version: string;
+	duration_ms: number;
+	token_usage: { prompt_tokens: number | null; completion_tokens: number | null; total_tokens: number | null } | null;
+	result: {
+		arq_trace: {
+			visual_audit: string;
+			scaffold_match: string;
+			discrepancies: string;
+		};
+		patches: RefinementPatch[];
+	};
+}
+
+function RefinementPanel() {
+	const data = refinementFixture as unknown as RefinementFixture;
+	const { result, vlm_model, prompt_version, duration_ms } = data;
+
+	return (
+		<Wireframe
+			label="VLM Refinement · Gemma 4 + DSPy/ARQ"
+			aside={
+				<div className="flex items-center gap-3 font-mono text-[10px] text-slate-400">
+					<span>{vlm_model}</span>
+					<span>·</span>
+					<span>{prompt_version}</span>
+					<span>·</span>
+					<span>{duration_ms} ms</span>
+					<span>·</span>
+					<span>{result.patches.length} patches</span>
+				</div>
+			}
+		>
+			<div className="space-y-0 divide-y divide-slate-100">
+				<DiscrepanciesCallout text={result.arq_trace.discrepancies} />
+				<PatchesTable patches={result.patches} />
+				<ARQDetails
+					visualAudit={result.arq_trace.visual_audit}
+					scaffoldMatch={result.arq_trace.scaffold_match}
+				/>
+			</div>
+		</Wireframe>
+	);
+}
+
+function DiscrepanciesCallout({ text }: { text: string }) {
+	return (
+		<div className="bg-amber-50/60 px-4 py-3">
+			<div className="text-[10px] font-medium uppercase tracking-[0.18em] text-amber-700">
+				Discrepancies
+			</div>
+			<p className="mt-1 text-[13px] leading-snug text-slate-800">{text}</p>
+		</div>
+	);
+}
+
+function PatchesTable({ patches }: { patches: RefinementPatch[] }) {
+	return (
+		<div className="px-4 py-3">
+			<div className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
+				Patches
+			</div>
+			<div className="overflow-hidden">
+				<table className="w-full table-fixed text-[12px]">
+					<colgroup>
+						<col className="w-[60px]" />
+						<col className="w-[110px]" />
+						<col className="w-[160px]" />
+						<col className="w-[60px]" />
+						<col />
+					</colgroup>
+					<thead>
+						<tr className="text-left font-mono text-[10px] uppercase tracking-wider text-slate-400">
+							<th className="px-2 py-1 font-normal">op</th>
+							<th className="px-2 py-1 font-normal">fragment_id</th>
+							<th className="px-2 py-1 font-normal">field_key</th>
+							<th className="px-2 py-1 font-normal text-right">conf</th>
+							<th className="px-2 py-1 font-normal">reason</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100">
+						{patches.map((p, i) => (
+							<tr key={`${p.fragment_id}-${p.field_key}-${i}`}>
+								<td className="px-2 py-1.5">
+									<OpChip op={p.op} />
+								</td>
+								<td className="px-2 py-1.5 font-mono text-slate-600">
+									{p.fragment_id ?? "—"}
+								</td>
+								<td className="px-2 py-1.5 font-mono text-slate-900">
+									{p.field_key ?? "—"}
+								</td>
+								<td className="px-2 py-1.5 text-right">
+									<ConfidenceCell value={p.confidence} />
+								</td>
+								<td className="px-2 py-1.5 text-slate-700">{p.reason}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
+}
+
+function OpChip({ op }: { op: RefinementPatch["op"] }) {
+	const styles: Record<RefinementPatch["op"], string> = {
+		assign: "bg-brand-blue/10 text-brand-blue",
+		reject: "bg-rose-50 text-rose-700",
+		add: "bg-emerald-50 text-emerald-700",
+		move: "bg-amber-50 text-amber-700",
+	};
+	return (
+		<span
+			className={`inline-block px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider ${styles[op]}`}
+		>
+			{op}
+		</span>
+	);
+}
+
+function ConfidenceCell({ value }: { value: number }) {
+	const tone =
+		value >= 0.85
+			? "text-emerald-700"
+			: value >= 0.6
+				? "text-amber-700"
+				: "text-rose-700";
+	return (
+		<span className={`font-mono ${tone}`}>{value.toFixed(2)}</span>
+	);
+}
+
+function ARQDetails({
+	visualAudit,
+	scaffoldMatch,
+}: {
+	visualAudit: string;
+	scaffoldMatch: string;
+}) {
+	return (
+		<div className="grid grid-cols-2 gap-px bg-slate-100">
+			<details className="bg-white px-4 py-3">
+				<summary className="cursor-pointer text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 hover:text-slate-600">
+					Visual audit ▸
+				</summary>
+				<p className="mt-2 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">
+					{visualAudit}
+				</p>
+			</details>
+			<details className="bg-white px-4 py-3">
+				<summary className="cursor-pointer text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 hover:text-slate-600">
+					Scaffold match ▸
+				</summary>
+				<p className="mt-2 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">
+					{scaffoldMatch}
+				</p>
+			</details>
+		</div>
+	);
 }
