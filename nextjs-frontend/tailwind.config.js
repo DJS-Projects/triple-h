@@ -16,6 +16,12 @@ module.exports = {
 				body: ["var(--font-body)", "ui-sans-serif", "system-ui"],
 				mono: ["var(--font-mono)", "ui-monospace", "Menlo"],
 			},
+			gridTemplateRows: {
+				/* Bento layout — row 1 (tracing paper + KVP) takes 2/3, row 2
+				   (audit) takes 1/3. Keep the ratio in config so callers stay
+				   on the standard Tailwind scale. */
+				bento: "2fr 1fr",
+			},
 			borderRadius: {
 				lg: "var(--radius)",
 				md: "calc(var(--radius) + 2px)",
