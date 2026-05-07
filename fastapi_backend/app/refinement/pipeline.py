@@ -22,7 +22,7 @@ from PIL import Image as PILImage
 from app.config import settings
 from app.refinement.apply_patches import apply_patches
 from app.refinement.schemas import ARQTrace, BBoxPatch, RefinementResult
-from app.refinement.signatures import PROMPT_VERSION, ClassifyFragments
+from app.refinement.signatures import PROMPT_VERSION, RefineScaffold
 
 logger = logging.getLogger(__name__)
 
@@ -79,15 +79,14 @@ def refine_scaffold(
     """
 
     lm, vlm_model = _build_lm()
-    # DSPy 3.x exposes from_PIL / from_file / from_url. Decode the page
-    # bytes via Pillow then hand the PIL image over.
+    # DSPy 3.x exposes Image(pil_image) directly; from_PIL is deprecated.
     pil_image = PILImage.open(io.BytesIO(page_image_bytes))
     pil_image.load()  # force-decode now so the BytesIO can be GC'd
-    image = dspy.Image.from_PIL(pil_image)
+    image = dspy.Image(pil_image)
     scaffold_blob = json.dumps(_compact_scaffold(docling_scaffold), indent=2)
     schema_blob = "\n".join(field_keys)
 
-    predictor = dspy.Predict(ClassifyFragments)
+    predictor = dspy.Predict(RefineScaffold)
 
     started_ms = time.perf_counter()
     try:

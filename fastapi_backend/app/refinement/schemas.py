@@ -11,9 +11,10 @@ Keep them small, frozen, and free of behaviour. Logic belongs in
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class BBox(BaseModel):
@@ -73,7 +74,16 @@ class BBoxPatch(BaseModel):
     )
     new_bbox: BBox | None = Field(
         default=None,
-        description="New bbox for add/move. PDF points, TOPLEFT origin.",
+        description="New bbox for add/move in PDF point space (TOPLEFT). "
+        "Either populate this directly OR populate `box_2d` and let the "
+        "applier convert. `box_2d` takes precedence when both are set.",
+    )
+    box_2d: list[int] | None = Field(
+        default=None,
+        description="Gemma-style bbox in 1000x1000 normalized image space "
+        "(TOPLEFT origin), [x_min, y_min, x_max, y_max]. Converted to "
+        "PDF points by the applier. Use this directly from VLM output "
+        "instead of pre-converting on the model side.",
     )
     new_text: str | None = Field(
         default=None,
@@ -94,6 +104,11 @@ class ARQTrace(BaseModel):
 
     Persisted verbatim to `refinement_run.arq_trace` so prompt-version
     drift can be diffed in audit UI.
+
+    All three reasoning fields normalise to `str`. Some VLMs (Gemma in
+    particular) return dict-shaped output for fields whose description
+    sounds list-like — we coerce those to JSON strings so the storage
+    contract stays single-typed without losing the structure.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -110,6 +125,15 @@ class ARQTrace(BaseModel):
         description="OCR errors enumerated: missing fields, mislabels, stale "
         "bboxes, artifacts. Each item quotes evidence from the image."
     )
+
+    @field_validator("visual_audit", "scaffold_match", "discrepancies", mode="before")
+    @classmethod
+    def _coerce_to_string(cls, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, indent=2, ensure_ascii=False)
+        return str(value)
 
 
 class RefinementResult(BaseModel):

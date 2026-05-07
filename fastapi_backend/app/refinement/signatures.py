@@ -11,14 +11,6 @@ Bump `PROMPT_VERSION` whenever the docstring, field descriptions, or
 output schema change. Persisted on every `refinement_run` row so audit
 diffs across versions stay coherent and (later) GEPA optimization
 groups runs correctly.
-
-Phase 1 scope
--------------
-Only `ClassifyFragments` is exposed today. It does the cheap, high-
-signal work — assigning OCR fragments to field keys — without asking
-the VLM to do pixel-precise geometry. Detection (`add`) and refinement
-(`move`) signatures land in Phase 2/3 once the eval harness has IoU
-ground truth to score against.
 """
 
 from __future__ import annotations
@@ -29,11 +21,11 @@ import dspy
 
 from app.refinement.schemas import ARQTrace, BBoxPatch
 
-PROMPT_VERSION: Final[str] = "classify-fragments@v1"
+PROMPT_VERSION: Final[str] = "refine-scaffold@v2"
 
 
-class ClassifyFragments(dspy.Signature):
-    """Refine an OCR scaffold by assigning fragments to field keys.
+class RefineScaffold(dspy.Signature):
+    """Refine an OCR scaffold by routing fragments AND drawing missing bboxes.
 
     You are given:
       1. A page image (visual ground truth).
@@ -56,15 +48,32 @@ class ClassifyFragments(dspy.Signature):
         OCR text errors, missing handwriting bboxes, mislabeled fields,
         artifacts to reject.
 
-    Then emit `patches`: a list of `BBoxPatch` operations. For Phase 1
-    only `assign` and `reject` operations are valid — do not emit
-    `add` or `move`. If a field has no matching OCR fragment, omit
-    the field rather than guessing geometry. The downstream extraction
-    LLM owns value extraction; your job here is fragment routing.
+    Then emit `patches`: a list of `BBoxPatch` operations. Four ops:
 
-    Self-report confidence on every patch. Filter aggressively — it is
-    better to skip a low-confidence assignment than to inject a wrong
-    routing that downstream trusts.
+      - `assign`  — fragment_id + field_key. Bind an existing OCR
+                    fragment to a field. No geometry change.
+      - `reject`  — fragment_id only. Flag artifact (page numbers,
+                    decorative text, OCR garbage).
+      - `add`     — field_key + new_text + box_2d. Use ONLY for
+                    regions OCR missed entirely (handwriting, stamps,
+                    signatures). Emit `box_2d` as a list of four
+                    integers in [x_min, y_min, x_max, y_max] order,
+                    normalized to a 1000x1000 image space (TOPLEFT
+                    origin). This matches your native bounding-box
+                    output convention — emit numbers, not prose.
+      - `move`    — fragment_id + box_2d. Use ONLY when an existing
+                    OCR fragment has the right text but a clearly
+                    wrong/cropped bbox. Same `box_2d` format as `add`.
+
+    Confidence rules:
+      • assign / reject: 1.0 acceptable when text is unambiguous.
+      • add / move: be honest. 0.85+ when you can pinpoint the region
+        within ~3% of page width. Lower otherwise. Patches under 0.5
+        are dropped by the applier — better to skip than guess.
+
+    Field key rules: emit only field_keys that appear in `field_schema`
+    verbatim. Do not invent keys. If a field is genuinely missing from
+    the page, omit it from patches rather than fabricating geometry.
     """
 
     page_image: dspy.Image = dspy.InputField(
@@ -76,13 +85,20 @@ class ClassifyFragments(dspy.Signature):
     )
     field_schema: str = dspy.InputField(
         desc="Newline-separated list of target field keys the downstream "
-        "system expects."
+        "system expects. Emit field_key values verbatim from this list."
     )
 
     arq_trace: ARQTrace = dspy.OutputField(
         desc="Structured reasoning checkpoints. Fill before emitting patches."
     )
     patches: list[BBoxPatch] = dspy.OutputField(
-        desc="Edit operations. Phase 1: `assign` and `reject` only — never "
-        "emit `add` or `move`. Skip a field rather than guessing."
+        desc="Edit operations. assign/reject for routing, add/move for "
+        "geometry. Use box_2d (1000x1000 normalized, TOPLEFT, "
+        "[x_min,y_min,x_max,y_max]) for add/move. Skip a field rather "
+        "than guessing geometry."
     )
+
+
+# Backwards-compat alias — older imports continue to resolve while the
+# pipeline is migrated to the new signature name.
+ClassifyFragments = RefineScaffold
