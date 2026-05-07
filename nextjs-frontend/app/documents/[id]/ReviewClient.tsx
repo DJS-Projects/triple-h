@@ -20,7 +20,12 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchExtractionModels, reextractDocument, saveFieldEdits } from "@/lib/api";
+import {
+	deleteFieldReview,
+	fetchExtractionModels,
+	reextractDocument,
+	saveFieldEdits,
+} from "@/lib/api";
 import { DOC_TYPE_LABELS, type DocType } from "@/lib/definitions";
 import {
 	coerceEdited,
@@ -70,6 +75,7 @@ interface DocumentDetail {
 		extracted_view: Record<string, unknown>;
 		field_pages: Record<string, number>;
 		reviews: Array<{
+			field_review_id: number;
 			field_path: string;
 			edited_value: unknown;
 			original_value: unknown;
@@ -166,6 +172,23 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 	}, [split.scalars, fieldPages, pageNo]);
 
 	const dirty = Object.keys(draft).length > 0;
+
+	const onDeleteReview = (reviewId: number, fieldPath: string) => {
+		if (
+			!window.confirm(
+				`Delete audit entry for "${fieldPath}"? The original extracted value will reappear.`,
+			)
+		)
+			return;
+		startTransition(async () => {
+			const result = await deleteFieldReview(doc.document_id, reviewId);
+			if ("error" in result) {
+				setError(result.error);
+				return;
+			}
+			router.refresh();
+		});
+	};
 
 	const onReExtract = () => {
 		setReExtracting(true);
@@ -465,11 +488,12 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 								<TableHead>Now</TableHead>
 								<TableHead>Remark</TableHead>
 								<TableHead>When</TableHead>
+								<TableHead className="w-[3rem]" />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
 							{run.reviews.map((r) => (
-								<TableRow key={`${r.field_path}-${r.created_at}`}>
+								<TableRow key={r.field_review_id}>
 									<TableCell className="font-mono text-xs">
 										{r.field_path}
 									</TableCell>
@@ -485,6 +509,19 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 										suppressHydrationWarning
 									>
 										{new Date(r.created_at).toLocaleString()}
+									</TableCell>
+									<TableCell className="text-right">
+										<button
+											type="button"
+											onClick={() =>
+												onDeleteReview(r.field_review_id, r.field_path)
+											}
+											disabled={isPending}
+											className="rounded-sm border border-transparent px-2 py-0.5 text-[11px] text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+											title="Delete this audit entry"
+										>
+											Delete
+										</button>
 									</TableCell>
 								</TableRow>
 							))}

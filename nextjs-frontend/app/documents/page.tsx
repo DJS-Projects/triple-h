@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteDocumentButton } from "@/components/delete-document-button";
 import {
 	Table,
 	TableBody,
@@ -81,6 +82,7 @@ export default async function DocumentsListPage({
 							<TableHead className="w-[6rem]">Status</TableHead>
 							<TableHead className="w-[5rem]">Pages</TableHead>
 							<TableHead className="w-[12rem]">Uploaded</TableHead>
+							<TableHead className="w-[5rem]" />
 						</TableRow>
 					</TableHeader>
 					<TableBody>
@@ -108,6 +110,12 @@ export default async function DocumentsListPage({
 									suppressHydrationWarning
 								>
 									{new Date(d.created_at).toLocaleString()}
+								</TableCell>
+								<TableCell className="text-right">
+									<DeleteDocumentButton
+										documentId={d.document_id}
+										filename={d.filename}
+									/>
 								</TableCell>
 							</TableRow>
 						))}

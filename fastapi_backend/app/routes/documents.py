@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page, paginate
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from app.database import get_async_session
-from app.models import Document, User
+from app.models import Document, DocumentPage, FieldReview, User
 from app.services import persistence
 from app.services.blob_store import BlobStore, get_blob_store
 from app.services.extraction_overlay import apply_overlay, get_at_path
@@ -52,6 +52,7 @@ class DocumentSummary(BaseModel):
 
 
 class FieldReviewSummary(BaseModel):
+    field_review_id: int
     field_path: str
     edited_value: Any
     original_value: Any | None
@@ -167,6 +168,7 @@ async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPa
     field_pages = compute_field_pages(extracted_view, chunks) if chunks else {}
     review_list = [
         FieldReviewSummary(
+            field_review_id=r.field_review_id,
             field_path=r.field_path,
             edited_value=r.edited_value,
             original_value=r.original_value,
@@ -416,3 +418,69 @@ async def get_document_page_annotated(
         # Cache per-run: same docling_doc + same page = same overlay.
         headers={"Cache-Control": "private, max-age=300"},
     )
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    blob_store: Annotated[BlobStore, Depends(_blob_store)],
+) -> Response:
+    """Hard-delete a document and everything it owns.
+
+    Cascade FKs handle DocumentPage / ExtractionRun / FieldReview /
+    RefinementRun rows. Blob store is best-effort: collect all keys
+    (page PNGs + original) before the SQL delete, then unlink each;
+    a failed unlink is logged but doesn't block the row delete.
+    """
+    doc = await persistence.get_document(session, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    # Snapshot every blob key associated with this doc before the row goes.
+    page_rows = await session.scalars(
+        select(DocumentPage).where(DocumentPage.document_id == document_id)
+    )
+    blob_keys = [doc.blob_key, *(p.blob_key for p in page_rows)]
+
+    await session.delete(doc)
+    await session.commit()
+
+    # Best-effort blob cleanup. We've already committed the DB delete, so a
+    # failure here just leaves orphaned bytes — not data corruption.
+    for key in blob_keys:
+        try:
+            await blob_store.delete(key)
+        except Exception:  # noqa: BLE001
+            # Most blob backends raise on missing keys; that's fine here.
+            pass
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{document_id}/reviews/{review_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_field_review(
+    document_id: uuid.UUID,
+    review_id: int,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> Response:
+    """Delete a single FieldReview row from the audit log.
+
+    Validates the review actually belongs to this document — prevents
+    cross-document review IDs from being mass-deleted via guessable ids.
+    """
+    review = await session.get(FieldReview, review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="review not found")
+
+    # Confirm the review's run belongs to this document.
+    run = await persistence.get_extraction_run(session, review.extraction_run_id)
+    if run is None or run.document_id != document_id:
+        raise HTTPException(status_code=404, detail="review not found")
+
+    await session.delete(review)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

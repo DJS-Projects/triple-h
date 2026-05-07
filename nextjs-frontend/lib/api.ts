@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import {
+	documentsDeleteDocument,
+	documentsDeleteFieldReview,
 	documentsGetDocumentDetail,
 	documentsListDocuments,
 	documentsPatchExtraction,
@@ -131,6 +133,47 @@ export async function reextractDocument(
 	}
 	revalidatePath(`/documents/${documentId}`);
 	return data;
+}
+
+export async function deleteDocument(
+	documentId: string,
+): Promise<ActionError | { ok: true }> {
+	const { error } = await documentsDeleteDocument({
+		path: { document_id: documentId },
+	});
+	if (error) {
+		const detail =
+			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		return {
+			error:
+				typeof detail === "string"
+					? detail
+					: JSON.stringify(detail ?? "delete failed"),
+		};
+	}
+	revalidatePath("/documents");
+	return { ok: true };
+}
+
+export async function deleteFieldReview(
+	documentId: string,
+	reviewId: number,
+): Promise<ActionError | { ok: true }> {
+	const { error } = await documentsDeleteFieldReview({
+		path: { document_id: documentId, review_id: reviewId },
+	});
+	if (error) {
+		const detail =
+			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		return {
+			error:
+				typeof detail === "string"
+					? detail
+					: JSON.stringify(detail ?? "delete failed"),
+		};
+	}
+	revalidatePath(`/documents/${documentId}`);
+	return { ok: true };
 }
 
 export async function refineExtraction(extractionRunId: number) {

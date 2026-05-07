@@ -461,6 +461,10 @@ export type FieldEdit = {
  */
 export type FieldReviewSummary = {
     /**
+     * Field Review Id
+     */
+    field_review_id: number;
+    /**
      * Field Path
      */
     field_path: string;
@@ -1356,6 +1360,36 @@ export type DocumentsListDocumentsResponses = {
 
 export type DocumentsListDocumentsResponse = DocumentsListDocumentsResponses[keyof DocumentsListDocumentsResponses];
 
+export type DocumentsDeleteDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}';
+};
+
+export type DocumentsDeleteDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DocumentsDeleteDocumentError = DocumentsDeleteDocumentErrors[keyof DocumentsDeleteDocumentErrors];
+
+export type DocumentsDeleteDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DocumentsDeleteDocumentResponse = DocumentsDeleteDocumentResponses[keyof DocumentsDeleteDocumentResponses];
+
 export type DocumentsGetDocumentDetailData = {
     body?: never;
     path: {
@@ -1513,6 +1547,40 @@ export type DocumentsGetDocumentPageAnnotatedResponses = {
      */
     200: unknown;
 };
+
+export type DocumentsDeleteFieldReviewData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Review Id
+         */
+        review_id: number;
+    };
+    query?: never;
+    url: '/documents/{document_id}/reviews/{review_id}';
+};
+
+export type DocumentsDeleteFieldReviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DocumentsDeleteFieldReviewError = DocumentsDeleteFieldReviewErrors[keyof DocumentsDeleteFieldReviewErrors];
+
+export type DocumentsDeleteFieldReviewResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DocumentsDeleteFieldReviewResponse = DocumentsDeleteFieldReviewResponses[keyof DocumentsDeleteFieldReviewResponses];
 
 export type RefineRefineExtractionData = {
     body?: never;
