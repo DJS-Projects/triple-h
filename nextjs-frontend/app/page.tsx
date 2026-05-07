@@ -1,44 +1,70 @@
 import Link from "next/link";
-import { FaGithub } from "react-icons/fa";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { UploadDropzone } from "@/components/upload-dropzone";
+import { fetchDocumentList } from "@/lib/api";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+	const recent = await fetchDocumentList(1, 8);
+	const items = "error" in recent ? [] : recent.items;
+
 	return (
-		<main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-8">
-			<div className="text-center max-w-2xl">
-				<h1 className="text-5xl font-bold text-gray-800 dark:text-white mb-6">
-					Welcome to the Next.js & FastAPI Boilerplate
-				</h1>
-				<p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
-					A simple and powerful template to get started with full-stack
-					development using Next.js and FastAPI.
+		<main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-10 px-6 py-12">
+			<header className="flex flex-col gap-2">
+				<p className="font-mono text-xs uppercase tracking-[0.18em] text-brand-blue">
+					Document Extraction
 				</p>
+				<h1 className="font-display text-4xl font-semibold tracking-tight text-brand-navy">
+					Upload a document
+				</h1>
+				<p className="max-w-xl text-sm text-muted-foreground">
+					Drop a PDF to run OCR + structured extraction. Document type is
+					auto-classified — override only if the model is wrong.
+				</p>
+			</header>
 
-				{/* Link to Dashboard */}
-				<Link href="/dashboard">
-					<Button className="px-8 py-4 text-xl font-semibold rounded-full shadow-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 focus:ring-4 focus:ring-blue-300">
-						Go to Dashboard
-					</Button>
-				</Link>
+			<UploadDropzone />
 
-				{/* GitHub Badge */}
-				<div className="mt-6">
-					<Badge
-						variant="outline"
-						className="text-sm flex items-center gap-2 px-3 py-2 rounded-lg border-gray-300 dark:border-gray-700"
+			<section className="flex flex-col gap-3">
+				<div className="flex items-end justify-between">
+					<h2 className="font-display text-lg font-semibold">
+						Recent uploads
+					</h2>
+					<Link
+						href="/documents"
+						className="text-sm text-muted-foreground hover:text-foreground"
 					>
-						<FaGithub className="w-5 h-5 text-black dark:text-white" />
-						<Link
-							href="https://github.com/vintasoftware/nextjs-fastapi-template"
-							target="_blank"
-							className="hover:underline"
-						>
-							View on GitHub
-						</Link>
-					</Badge>
+						View all →
+					</Link>
 				</div>
-			</div>
+
+				{items.length === 0 ? (
+					<p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+						Nothing uploaded yet.
+					</p>
+				) : (
+					<ul className="divide-y rounded-md border">
+						{items.map((d) => (
+							<li key={d.document_id}>
+								<Link
+									href={`/documents/${d.document_id}`}
+									className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50"
+								>
+									<div className="min-w-0 flex-1">
+										<p className="truncate font-medium">{d.filename}</p>
+										<p className="font-mono text-xs text-muted-foreground">
+											{d.doc_type ?? "—"} · {d.status}
+										</p>
+									</div>
+									<time className="font-mono text-xs text-muted-foreground">
+										{new Date(d.created_at).toLocaleString()}
+									</time>
+								</Link>
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
 		</main>
 	);
 }
