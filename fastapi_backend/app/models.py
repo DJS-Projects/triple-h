@@ -231,6 +231,12 @@ class ExtractionRun(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    refinement_runs = relationship(
+        "RefinementRun",
+        back_populates="extraction_run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         CheckConstraint("duration_ms >= 0", name="extraction_run_duration_nonneg"),
@@ -300,5 +306,92 @@ class FieldReview(Base):
             "ix_field_review_extraction_field",
             "extraction_run_id",
             "field_path",
+        ),
+    )
+
+
+class RefinementRun(Base):
+    """Append-only history of VLM refinement passes over an extraction.
+
+    A refinement run takes a DoclingDocument scaffold (the OCR output of
+    Chandra) and the source page image, then asks a Vision LLM to emit a
+    list of typed `BBoxPatch` operations that fix OCR mistakes —
+    misclassified fragments, missing handwriting boxes, stale bbox
+    positions, etc. The original scaffold is preserved (`scaffold_in`),
+    the patched scaffold is persisted (`scaffold_out`), and the
+    structured ARQ trace stays alongside for full auditability.
+
+    Schema notes
+    ------------
+    - One refinement_run is bound to exactly one extraction_run; both
+      are independently versioned. The current scaffold for display is
+      `scaffold_out` of the latest `is_current` row, falling back to the
+      extraction_run's docling_doc when no refinement has run yet.
+    - `arq_trace` carries the reasoning checkpoints from the DSPy
+      Signature: visual_audit, scaffold_match, discrepancies. We store
+      them verbatim so prompt-version drift can be diffed in audit UI.
+    - `prompt_version` ties the call to a versioned DSPy Signature
+      class — bump on schema changes so optimization runs (later) are
+      grouped correctly.
+    """
+
+    __tablename__ = "refinement_run"
+
+    refinement_run_id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True),
+        primary_key=True,
+    )
+    extraction_run_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("extraction_run.extraction_run_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    vlm_model: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
+    scaffold_in: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    scaffold_out: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    patches: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    arq_trace: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    token_usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_current: Mapped[bool] = mapped_column(
+        nullable=False,
+        server_default="true",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    extraction_run = relationship("ExtractionRun", back_populates="refinement_runs")
+
+    __table_args__ = (
+        CheckConstraint("duration_ms >= 0", name="refinement_run_duration_nonneg"),
+        CheckConstraint(
+            "jsonb_typeof(scaffold_in) = 'object'",
+            name="refinement_run_scaffold_in_is_object",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(scaffold_out) = 'object'",
+            name="refinement_run_scaffold_out_is_object",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(patches) = 'array'",
+            name="refinement_run_patches_is_array",
+        ),
+        # Composite (extraction_run_id, created_at) covers single-col
+        # extraction_run_id lookups — no separate index needed.
+        Index(
+            "ix_refinement_run_extraction_created",
+            "extraction_run_id",
+            "created_at",
+        ),
+        Index(
+            "uq_refinement_run_one_current_per_extraction",
+            "extraction_run_id",
+            unique=True,
+            postgresql_where="is_current",
         ),
     )

@@ -24,6 +24,12 @@ dependencies = [
     "datalab-python-sdk>=0.5.0,<1",
     # Async filesystem ops for the local blob backend.
     "aiofiles>=24.1.0,<25",
+    # DSPy: typed Signature programming model for LLM/VLM calls. Used by
+    # app/refinement/ to keep ARQ-style reasoning checkpoints, traceable
+    # I/O, and (later) GEPA optimization on a held-out IoU eval set.
+    "dspy-ai>=2.5.0,<3",
+    # Pillow: image encoding for VLM payloads + page-render coord checks.
+    "pillow>=10.4.0,<12",
 ]
 
 [dependency-groups]

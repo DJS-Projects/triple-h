@@ -1,10 +1,11 @@
 # LiteLLM proxy config — Triple-H
 #
 # Virtual model names (used by backend):
-#   vision-primary    — Groq Llama 4 Scout (free, fast, vision)
-#   vision-fallback-1 — NIM Llama 3.2 90B Vision
+#   vision-primary     — Groq Llama 4 Scout (free, fast, vision)
+#   vision-fallback-1  — NIM Llama 3.2 90B Vision
 #   structured-primary — Doubleword Qwen3.5-397B + dottxt (text-only, schema-enforced)
 #   chat-primary       — Groq Llama 3.3 70B (text chat)
+#   refinement-vlm     — Google Gemma vision (DSPy/ARQ-controlled OCR refinement)
 #
 # Fallbacks chain on rate-limit / error.
 
@@ -39,6 +40,16 @@ model_list:
     litellm_params:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
+
+  # ── Refinement: Google Gemma vision (DSPy/ARQ-controlled) ──────────────
+  # Used by app/refinement/ to refine OCR scaffolds against page images.
+  # Cheap, supports vision input, good for fragment classification and
+  # coarse bbox detection. Update model id when Gemma 4 multimodal API
+  # name lands; signature interface stays the same.
+  - model_name: refinement-vlm
+    litellm_params:
+      model: gemini/gemma-3-27b-it
+      api_key: os.environ/GOOGLE_API_KEY
 
 router_settings:
   routing_strategy: simple-shuffle

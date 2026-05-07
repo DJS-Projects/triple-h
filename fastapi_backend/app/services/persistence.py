@@ -17,7 +17,13 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, DocumentPage, ExtractionRun, FieldReview
+from app.models import (
+    Document,
+    DocumentPage,
+    ExtractionRun,
+    FieldReview,
+    RefinementRun,
+)
 from app.services.blob_store import (
     BlobStore,
     document_key,
@@ -225,5 +231,68 @@ async def get_page(
         select(DocumentPage).where(
             DocumentPage.document_id == document_id,
             DocumentPage.page_no == page_no,
+        )
+    )
+
+
+async def get_extraction_run(
+    session: AsyncSession, extraction_run_id: int
+) -> ExtractionRun | None:
+    return await session.get(ExtractionRun, extraction_run_id)
+
+
+async def record_refinement_run(
+    session: AsyncSession,
+    *,
+    extraction_run_id: int,
+    vlm_model: str,
+    prompt_version: str,
+    scaffold_in: dict[str, Any],
+    scaffold_out: dict[str, Any],
+    patches: list[dict[str, Any]],
+    arq_trace: dict[str, Any],
+    token_usage: dict[str, Any] | None,
+    duration_ms: int,
+) -> RefinementRun:
+    """Append a new refinement run, demote any prior `is_current` row.
+
+    The unique partial index `uq_refinement_run_one_current_per_extraction`
+    guarantees one current refinement per extraction. Same demote-then-
+    insert pattern as `record_extraction_run` so the constraint never
+    sees two `is_current` rows simultaneously.
+    """
+    await session.execute(
+        update(RefinementRun)
+        .where(
+            RefinementRun.extraction_run_id == extraction_run_id,
+            RefinementRun.is_current.is_(True),
+        )
+        .values(is_current=False)
+    )
+
+    run = RefinementRun(
+        extraction_run_id=extraction_run_id,
+        vlm_model=vlm_model,
+        prompt_version=prompt_version,
+        scaffold_in=scaffold_in,
+        scaffold_out=scaffold_out,
+        patches=patches,
+        arq_trace=arq_trace,
+        token_usage=token_usage,
+        duration_ms=duration_ms,
+        is_current=True,
+    )
+    session.add(run)
+    await session.flush()
+    return run
+
+
+async def get_current_refinement_run(
+    session: AsyncSession, extraction_run_id: int
+) -> RefinementRun | None:
+    return await session.scalar(
+        select(RefinementRun).where(
+            RefinementRun.extraction_run_id == extraction_run_id,
+            RefinementRun.is_current.is_(True),
         )
     )
