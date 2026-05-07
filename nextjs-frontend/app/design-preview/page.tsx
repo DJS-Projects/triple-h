@@ -251,6 +251,8 @@ function DocumentCanvas({
 	liveText: boolean;
 	onFocus: (key: string) => void;
 }) {
+	const vlmBoxes = useVLMAddPatches();
+
 	return (
 		<PageOverlay naturalWidth={PAGE_W} naturalHeight={PAGE_H}>
 			<img
@@ -287,7 +289,99 @@ function DocumentCanvas({
 						/>
 					),
 			)}
+			{vlmBoxes.map((b) => (
+				<VLMBBoxRect
+					key={`vlm-${b.field_key}`}
+					bbox={b.bbox}
+					naturalWidth={PAGE_W}
+					naturalHeight={PAGE_H}
+					label={b.field_key}
+					confidence={b.confidence}
+				/>
+			))}
 		</PageOverlay>
+	);
+}
+
+/**
+ * Pull the `add` patches out of the refinement fixture and convert
+ * Gemma's 1000x1000 normalized coords into our 1545x2000 page-natural
+ * sandbox space. Only emits when text + box_2d are both present.
+ */
+function useVLMAddPatches(): {
+	field_key: string;
+	bbox: BBox;
+	confidence: number;
+}[] {
+	const data = refinementFixture as unknown as {
+		result: {
+			patches: {
+				op: string;
+				field_key: string | null;
+				box_2d: number[] | null;
+				confidence: number;
+			}[];
+		};
+	};
+	return data.result.patches
+		.filter(
+			(p) =>
+				p.op === "add" &&
+				p.field_key &&
+				Array.isArray(p.box_2d) &&
+				p.box_2d.length === 4,
+		)
+		.map((p) => {
+			const [x1, y1, x2, y2] = p.box_2d as [number, number, number, number];
+			return {
+				field_key: p.field_key as string,
+				confidence: p.confidence,
+				bbox: {
+					x: (x1 / 1000) * PAGE_W,
+					y: (y1 / 1000) * PAGE_H,
+					w: ((x2 - x1) / 1000) * PAGE_W,
+					h: ((y2 - y1) / 1000) * PAGE_H,
+				},
+			};
+		});
+}
+
+/**
+ * Distinct visual style for VLM-added regions. Pink/magenta tone so
+ * they read as separate from the slate OCR bboxes. Confidence drives
+ * border weight; label + value chip floats above the bbox so the user
+ * can tell at-a-glance what Gemma proposed.
+ */
+function VLMBBoxRect({
+	bbox,
+	naturalWidth,
+	naturalHeight,
+	label,
+	confidence,
+}: {
+	bbox: BBox;
+	naturalWidth: number;
+	naturalHeight: number;
+	label: string;
+	confidence: number;
+}) {
+	const style: CSSProperties = {
+		left: `${(bbox.x / naturalWidth) * 100}%`,
+		top: `${(bbox.y / naturalHeight) * 100}%`,
+		width: `${(bbox.w / naturalWidth) * 100}%`,
+		height: `${(bbox.h / naturalHeight) * 100}%`,
+	};
+	const borderClass = confidence >= 0.85 ? "border-2" : "border";
+	return (
+		<div
+			className={`pointer-events-none absolute ${borderClass} border-fuchsia-500/70 bg-fuchsia-500/5`}
+			style={style}
+			aria-label={`VLM proposed ${label}`}
+		>
+			<span className="absolute -top-4 left-0 bg-fuchsia-500 px-1 py-px font-mono text-[8px] font-medium uppercase tracking-wider text-white">
+				vlm · {label}
+			</span>
+		</div>
 	);
 }
 
