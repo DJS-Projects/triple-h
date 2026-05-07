@@ -18,9 +18,10 @@ from app.database import get_async_session
 from app.models import User
 from app.services import persistence
 from app.services.blob_store import BlobStore, get_blob_store
+from app.services.architecture import DocType
 from app.services.chandra_ocr import convert_bytes_with_chunks_async
-from app.services.extraction import DocType, extract_structured
-from app.users import current_active_user
+from app.services.extraction import extract_structured
+from app.users import get_system_user
 
 router = APIRouter(tags=["extract"])
 
@@ -44,7 +45,6 @@ class StructuredExtractResponse(BaseModel):
     page_count: int | None
     duration_ms: int
     extracted: dict[str, Any]
-    markdown: str
     docling_doc: dict[str, Any]
     checkpoint_id: str | None = None
 
@@ -88,10 +88,18 @@ async def extract_document(
 @router.post("/extract/structured", response_model=StructuredExtractResponse)
 async def extract_document_structured(
     file: Annotated[UploadFile, File(description="PDF or image file")],
+    # Accept `str` (not `DocType | None`) so Swagger's empty-string default
+    # doesn't fail Literal validation. We normalise + validate below.
     doc_type: Annotated[
-        DocType,
-        Form(description="delivery_order | weighing_bill | invoice | petrol_bill"),
-    ] = "delivery_order",
+        str | None,
+        Form(
+            description=(
+                "Optional manual override: delivery_order | weighing_bill | "
+                "invoice | petrol_bill. Leave empty to auto-classify via "
+                "Gemma vision."
+            )
+        ),
+    ] = None,
     model: Annotated[
         str,
         Form(
@@ -99,7 +107,7 @@ async def extract_document_structured(
         ),
     ] = "vision-primary",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
-    user: User = Depends(current_active_user),
+    user: User = Depends(get_system_user),
     session: AsyncSession = Depends(get_async_session),
     blob_store: BlobStore = Depends(_blob_store),
 ) -> StructuredExtractResponse:
@@ -110,6 +118,23 @@ async def extract_document_structured(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="empty file")
+
+    # Normalise empty string → None (Swagger default). Validate the label
+    # against the allowed set; unknown labels get a 400 instead of a 500
+    # from the schema lookup downstream.
+    normalised_doc_type: DocType | None
+    if doc_type is None or doc_type == "":
+        normalised_doc_type = None
+    elif doc_type in ("delivery_order", "weighing_bill", "invoice", "petrol_bill"):
+        normalised_doc_type = doc_type  # type: ignore[assignment]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"unknown doc_type {doc_type!r}; allowed: delivery_order, "
+                "weighing_bill, invoice, petrol_bill (or omit to auto-classify)"
+            ),
+        )
 
     document, is_new = await persistence.ingest_document(
         session,
@@ -124,7 +149,7 @@ async def extract_document_structured(
         result = await extract_structured(
             file_bytes,
             file.filename,
-            doc_type=doc_type,
+            doc_type=normalised_doc_type,
             model=model,
             dpi=dpi,
         )
@@ -171,7 +196,6 @@ async def extract_document_structured(
         page_count=result.page_count,
         duration_ms=result.duration_ms,
         extracted=result.extracted,
-        markdown=result.markdown,
         docling_doc=result.docling_doc,
         checkpoint_id=result.checkpoint_id,
     )

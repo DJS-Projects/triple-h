@@ -19,7 +19,7 @@ import logging
 import time
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Literal, TypeVar
+from typing import Any, TypeVar
 
 from pdf2image import convert_from_bytes
 from pydantic import BaseModel
@@ -28,12 +28,14 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
-from app.services.architecture import DoclingArchitecture, default_architecture
+from app.services.architecture import (
+    DoclingArchitecture,
+    DocType,
+    default_architecture,
+)
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
 
 _log = logging.getLogger(__name__)
-
-DocType = Literal["delivery_order", "weighing_bill", "invoice", "petrol_bill"]
 
 # Vision providers cap how many images per request:
 #   Groq Llama-4-Scout: 5
@@ -138,23 +140,31 @@ async def extract_structured(
     pdf_bytes: bytes,
     filename: str,
     *,
-    doc_type: DocType,
+    doc_type: DocType | None = None,
     model: str = "vision-primary",
     dpi: int = 150,
     architecture: DoclingArchitecture | None = None,
 ) -> ExtractionPipelineResult:
     """One extractor call + page render + LLM call → typed result.
 
-    The Docling architecture is what owns the OCR provider choice
-    (Chandra today). Pages are always rendered regardless of LLM choice
-    so the persistence layer can cache them for the review UI; the LLM
-    only receives images when the model is vision-capable.
+    `doc_type=None` triggers the architecture's classifier first; passing
+    a label explicitly bypasses classification (test fixtures, known docs).
+    Pages are always rendered regardless of LLM choice so the persistence
+    layer can cache them for the review UI; the LLM only receives images
+    when the model is vision-capable.
     """
-    schema = _SCHEMA_BY_TYPE[doc_type]
-    prompt_intro = _PROMPT_BY_TYPE[doc_type]
     arch = architecture or default_architecture()
 
     overall_start = time.perf_counter()
+
+    if doc_type is None:
+        # Classifier is a single small vision call (~1s). Sequential
+        # because the schema/prompt selected here gates the parallel
+        # extraction + render fan-out below.
+        doc_type = await arch.classify(pdf_bytes, filename)
+
+    schema = _SCHEMA_BY_TYPE[doc_type]
+    prompt_intro = _PROMPT_BY_TYPE[doc_type]
 
     # Run extraction (Chandra OCR → DoclingDocument) in parallel with
     # page rendering. Page PNGs are needed for the LLM call (vision
@@ -182,7 +192,7 @@ async def extract_structured(
         llm_images = []
 
     agent = _build_agent(model, schema)
-    user_message: list = [
+    user_message: list[Any] = [
         prompt_intro,
         f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{artifacts.markdown}",
         *llm_images,

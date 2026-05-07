@@ -22,7 +22,7 @@ from app.models import Document, User
 from app.services import persistence
 from app.services.blob_store import BlobStore, get_blob_store
 from app.services.extraction_overlay import apply_overlay, get_at_path
-from app.users import current_active_user
+from app.users import get_system_user
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -104,7 +104,7 @@ def _blob_store() -> BlobStore:
 
 @router.get("", response_model=Page[DocumentSummary])
 async def list_documents(
-    user: Annotated[User, Depends(current_active_user)],
+    user: Annotated[User, Depends(get_system_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> Page[DocumentSummary]:
     rows = await session.scalars(
@@ -150,7 +150,7 @@ async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPa
 @router.get("/{document_id}", response_model=DocumentDetail)
 async def get_document_detail(
     document_id: uuid.UUID,
-    user: Annotated[User, Depends(current_active_user)],
+    user: Annotated[User, Depends(get_system_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> DocumentDetail:
     doc = await persistence.get_document(session, document_id)
@@ -173,7 +173,7 @@ async def get_document_detail(
 async def patch_extraction(
     document_id: uuid.UUID,
     body: PatchExtractionRequest,
-    user: Annotated[User, Depends(current_active_user)],
+    user: Annotated[User, Depends(get_system_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ) -> PatchExtractionResponse:
     """Append `field_review` rows; do NOT mutate `extraction_run.payload`.
@@ -222,7 +222,7 @@ async def patch_extraction(
 async def get_document_page_png(
     document_id: uuid.UUID,
     page_no: int,
-    user: Annotated[User, Depends(current_active_user)],
+    user: Annotated[User, Depends(get_system_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
     blob_store: Annotated[BlobStore, Depends(_blob_store)],
 ) -> Response:

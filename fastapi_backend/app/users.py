@@ -17,9 +17,11 @@ from fastapi_users.authentication import (
     JWTStrategy,
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
-from .database import get_user_db
+from .database import get_async_session, get_user_db
 from .email import send_reset_password_email
 from .models import User
 from .schemas import UserCreate
@@ -87,3 +89,45 @@ auth_backend = AuthenticationBackend(
 fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 
 current_active_user = fastapi_users.current_user(active=True)
+
+
+# ---------------------------------------------------------------------------
+# Auth-free system user
+# ---------------------------------------------------------------------------
+# Single-tenant local tool — data routes don't require a JWT. Every upload /
+# read resolves to one canonical "system" row so foreign keys
+# (`Document.uploaded_by`, `RefinementRun.reviewer_id`) stay satisfied
+# without forcing callers to log in. Auth router stays mounted for anyone
+# who still wants to use it; the JWT just isn't checked on data routes.
+
+SYSTEM_USER_EMAIL = "system@triple-h.local"
+# Sentinel hash that won't validate via bcrypt — the system row exists for
+# FK purposes only, never for login.
+_SYSTEM_USER_PASSWORD_HASH = "!system!no-login!"  # noqa: S105
+
+
+async def get_system_user(
+    session: AsyncSession = Depends(get_async_session),
+) -> User:
+    """Return (or lazily create) the canonical system user.
+
+    Used as a drop-in replacement for `current_active_user` on data routes
+    so they work without an Authorization header. The row is created on
+    first request — no migration needed.
+    """
+    result = await session.execute(select(User).where(User.email == SYSTEM_USER_EMAIL))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        return user
+
+    user = User(
+        id=uuid.uuid4(),
+        email=SYSTEM_USER_EMAIL,
+        hashed_password=_SYSTEM_USER_PASSWORD_HASH,
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    session.add(user)
+    await session.flush()
+    return user

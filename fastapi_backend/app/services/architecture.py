@@ -25,9 +25,11 @@ Why this exists:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from docling_core.types.doc import DoclingDocument
+
+DocType = Literal["delivery_order", "weighing_bill", "invoice", "petrol_bill"]
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,20 @@ class Extractor(Protocol):
     name: str
 
     async def extract(self, pdf_bytes: bytes, filename: str) -> ExtractionArtifacts: ...
+
+
+class Classifier(Protocol):
+    """Maps PDF bytes → DocType label.
+
+    Cheap visual pre-pass that picks which extraction schema to apply.
+    Runs before the extractor so the rest of the pipeline can stay
+    schema-specialised. Manual `doc_type` override on the route bypasses
+    this entirely (test fixtures, known docs).
+    """
+
+    name: str
+
+    async def classify(self, pdf_bytes: bytes, filename: str) -> DocType: ...
 
 
 class ChandraExtractor:
@@ -91,19 +107,34 @@ class ChandraExtractor:
 
 @dataclass
 class DoclingArchitecture:
-    """Composes an `Extractor` with future visual-check / result-writer slots.
+    """Composes a `Classifier` + `Extractor` (+ future visual-check, writer).
 
-    Today this is a thin wrapper around one extractor — the shape exists so
-    swapping providers or adding a premium-mode visual verification pass is
-    a one-line change at the architecture level, not a route rewrite.
+    The `classifier` slot is optional: routes that pass `doc_type`
+    explicitly skip classification entirely. Routes that omit `doc_type`
+    invoke `classify()` first and feed the label into `extract()`.
     """
 
     extractor: Extractor
+    classifier: Classifier | None = None
 
     async def extract(self, pdf_bytes: bytes, filename: str) -> ExtractionArtifacts:
         return await self.extractor.extract(pdf_bytes, filename)
 
+    async def classify(self, pdf_bytes: bytes, filename: str) -> DocType:
+        if self.classifier is None:
+            raise RuntimeError(
+                "no classifier wired on DoclingArchitecture; pass doc_type explicitly"
+            )
+        return await self.classifier.classify(pdf_bytes, filename)
+
 
 def default_architecture() -> DoclingArchitecture:
-    """Default wiring: Chandra everywhere."""
-    return DoclingArchitecture(extractor=ChandraExtractor())
+    """Default wiring: Chandra extractor + Gemma classifier."""
+    # Lazy import: GemmaClassifier pulls pydantic_ai + pdf2image, keeping
+    # this module importable without LLM/render deps for tests.
+    from app.services.classifier import GemmaClassifier
+
+    return DoclingArchitecture(
+        extractor=ChandraExtractor(),
+        classifier=GemmaClassifier(),
+    )

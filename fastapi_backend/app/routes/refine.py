@@ -24,7 +24,7 @@ from app.refinement.pipeline import refine_scaffold
 from app.refinement.schemas import RefinementResult
 from app.services import persistence
 from app.services.blob_store import BlobStore, get_blob_store
-from app.users import current_active_user
+from app.users import get_system_user
 
 router = APIRouter(tags=["refine"])
 
@@ -51,7 +51,7 @@ async def refine_extraction(
         int,
         Query(ge=1, description="Page number to refine (1-indexed). Default 1."),
     ] = 1,
-    user: User = Depends(current_active_user),
+    user: User = Depends(get_system_user),
     session: AsyncSession = Depends(get_async_session),
     blob_store: BlobStore = Depends(_blob_store),
 ) -> RefineResponse:
