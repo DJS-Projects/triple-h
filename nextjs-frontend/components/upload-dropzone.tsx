@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,29 @@ export function UploadDropzone() {
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
 	const [dragOver, setDragOver] = useState(false);
+	const [elapsed, setElapsed] = useState(0);
+
+	// Tick the elapsed counter while uploading. The pipeline is a single
+	// blocking POST (no streaming), so we can't show real progress — only
+	// time spent + a stage hint that switches based on typical timings.
+	useEffect(() => {
+		if (status !== "uploading") {
+			setElapsed(0);
+			return;
+		}
+		const t0 = Date.now();
+		const id = setInterval(() => {
+			setElapsed(Math.floor((Date.now() - t0) / 100) / 10);
+		}, 100);
+		return () => clearInterval(id);
+	}, [status]);
+
+	// Stage label based on elapsed seconds — rough timeline matching the
+	// observed pipeline (Chandra ~5-25s, LLM ~10-20s).
+	let stage = "Uploading…";
+	if (elapsed > 1.5) stage = "Running Chandra OCR…";
+	if (elapsed > 8) stage = "Running VLM extraction…";
+	if (elapsed > 35) stage = "Almost there…";
 
 	useEffect(() => {
 		let cancelled = false;
@@ -183,7 +207,14 @@ export function UploadDropzone() {
 					disabled={!file || status === "uploading"}
 					className="ml-auto"
 				>
-					{status === "uploading" ? "Extracting…" : "Extract"}
+					{status === "uploading" ? (
+						<>
+							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+							Extracting
+						</>
+					) : (
+						"Extract"
+					)}
 				</Button>
 			</div>
 
@@ -199,9 +230,28 @@ export function UploadDropzone() {
 			) : null}
 
 			{status === "uploading" ? (
-				<p className="font-mono text-xs text-muted-foreground">
-					Running Chandra OCR + LLM extraction. Typical: 8–25s. Hang tight.
-				</p>
+				<div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
+					<div className="flex items-center gap-3">
+						<Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-deep" />
+						<div className="flex flex-1 items-baseline justify-between gap-2 font-mono text-xs">
+							<span className="text-foreground">{stage}</span>
+							<span className="tabular-nums text-muted-foreground">
+								{elapsed.toFixed(1)}s
+							</span>
+						</div>
+					</div>
+					{/* Indeterminate progress bar (no streaming; this is just a
+					    living-system signal so the user knows it's working). */}
+					<div
+						className="relative h-1 overflow-hidden rounded-full bg-muted"
+						aria-hidden
+					>
+						<div className="absolute inset-y-0 -left-1/3 w-1/3 animate-[indeterminate_1.6s_ease-in-out_infinite] rounded-full bg-brand-deep" />
+					</div>
+					<p className="font-mono text-[11px] text-muted-foreground">
+						Single-doc pipeline. Typical: 30-50s for multi-page docs.
+					</p>
+				</div>
 			) : null}
 
 			{error ? (

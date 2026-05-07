@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface BlockOverlay {
 	block_id: string;
@@ -36,6 +36,9 @@ interface PageOverlayProps {
 	scale: number;
 }
 
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+
 export function PageOverlay({
 	imageSrc,
 	pageBlocks,
@@ -45,9 +48,66 @@ export function PageOverlay({
 }: PageOverlayProps) {
 	const [overlayVisible, setOverlayVisible] = useState(true);
 	const [opacity, setOpacity] = useState(0.4);
+	const [pan, setPan] = useState({ x: 0, y: 0 });
+	const [isDragging, setIsDragging] = useState(false);
+	const dragStart = useRef<{
+		mouseX: number;
+		mouseY: number;
+		panX: number;
+		panY: number;
+	} | null>(null);
 
 	const w = pageBlocks?.width_px ?? 1;
 	const h = pageBlocks?.height_px ?? 1;
+
+	// Treat the parent-supplied `scale` as the magnifier zoom (1× = fit,
+	// up to ZOOM_MAX). Keep pan locked at 1× — at fit there's nothing to
+	// pan around — and reset whenever zoom drops back to 1.
+	const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
+	const panEnabled = zoom > ZOOM_MIN + 0.001;
+
+	useEffect(() => {
+		if (!panEnabled) setPan({ x: 0, y: 0 });
+	}, [panEnabled]);
+
+	const onMouseDown = useCallback(
+		(e: React.MouseEvent<HTMLDivElement>) => {
+			if (!panEnabled) return;
+			e.preventDefault();
+			dragStart.current = {
+				mouseX: e.clientX,
+				mouseY: e.clientY,
+				panX: pan.x,
+				panY: pan.y,
+			};
+			setIsDragging(true);
+		},
+		[panEnabled, pan.x, pan.y],
+	);
+
+	useEffect(() => {
+		if (!isDragging) return;
+		const onMove = (e: MouseEvent) => {
+			const ds = dragStart.current;
+			if (!ds) return;
+			setPan({
+				x: ds.panX + (e.clientX - ds.mouseX),
+				y: ds.panY + (e.clientY - ds.mouseY),
+			});
+		};
+		const onUp = () => {
+			setIsDragging(false);
+			dragStart.current = null;
+		};
+		window.addEventListener("mousemove", onMove);
+		window.addEventListener("mouseup", onUp);
+		return () => {
+			window.removeEventListener("mousemove", onMove);
+			window.removeEventListener("mouseup", onUp);
+		};
+	}, [isDragging]);
+
+	const transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -81,10 +141,21 @@ export function PageOverlay({
 				</span>
 			</div>
 
-			{/* Vertical-fit: image always fits within parent height, letterboxes
-			    horizontally if narrower. SVG uses preserveAspectRatio=meet so the
-			    overlay coords stay aligned with the painted image area. */}
-			<div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+			{/* Vertical-fit + magnifier-pan:
+			    - At zoom = 1: image fills parent height (object-contain), pan locked.
+			    - At zoom > 1: drag-to-pan inside an overflow-hidden viewport.
+			    Both image and SVG share the same translate+scale transform so the
+			    polygon overlay stays aligned with the painted image at any zoom. */}
+			<div
+				onMouseDown={onMouseDown}
+				className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border bg-muted/30 ${
+					panEnabled
+						? isDragging
+							? "cursor-grabbing"
+							: "cursor-grab"
+						: "cursor-default"
+				}`}
+			>
 				{/* biome-ignore lint/performance/noImgElement: dynamic upstream proxy */}
 				<img
 					src={imageSrc}
@@ -92,6 +163,12 @@ export function PageOverlay({
 					width={w}
 					height={h}
 					className="max-h-full max-w-full select-none object-contain"
+					style={{
+						transform,
+						transformOrigin: "center center",
+						transition: isDragging ? "none" : "transform 120ms ease-out",
+						willChange: "transform",
+					}}
 					draggable={false}
 				/>
 
@@ -101,8 +178,10 @@ export function PageOverlay({
 						preserveAspectRatio="xMidYMid meet"
 						className="pointer-events-none absolute inset-0 h-full w-full"
 						style={{
-							transform: `scale(${scale})`,
+							transform,
 							transformOrigin: "center center",
+							transition: isDragging ? "none" : "transform 120ms ease-out",
+							willChange: "transform",
 						}}
 					>
 						<g className="pointer-events-auto">
@@ -148,19 +227,19 @@ export function ScaleSlider({ scale, onChange }: ScaleSliderProps) {
 	return (
 		<label className="flex items-center gap-2 text-xs">
 			<span className="font-mono uppercase tracking-[0.14em] text-muted-foreground">
-				Scale
+				Zoom
 			</span>
 			<input
 				type="range"
-				min={0.85}
-				max={1.15}
-				step={0.005}
+				min={1}
+				max={4}
+				step={0.05}
 				value={scale}
 				onChange={(e) => onChange(Number(e.target.value))}
 				className="mx-2 w-32 accent-brand-deep"
 			/>
 			<span className="font-mono tabular-nums text-muted-foreground">
-				{scale.toFixed(3)}×
+				{scale.toFixed(2)}×
 			</span>
 			<button
 				type="button"
