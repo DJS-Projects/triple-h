@@ -9,6 +9,7 @@ only talks to the VLM.
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import time
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import dspy
+from PIL import Image as PILImage
 
 from app.config import settings
 from app.refinement.apply_patches import apply_patches
@@ -38,12 +40,12 @@ class RefinementOutcome:
     token_usage: dict[str, Any] | None
 
 
-def _configure_dspy() -> str:
-    """Wire DSPy to the LiteLLM proxy on every call.
+def _build_lm() -> tuple[dspy.LM, str]:
+    """Construct a DSPy LM bound to our LiteLLM virtual model.
 
-    Cheap idempotent op — DSPy's `configure` swaps the active LM. We
-    pin to the `refinement-vlm` virtual model so swapping the
-    underlying provider only requires editing `litellm/config.yaml`.
+    Returns the LM plus the model id we want to record on the
+    `refinement_run` row. Pinned to `openai/refinement-vlm` so swapping
+    the underlying provider only requires editing `litellm/config.yaml`.
     """
 
     base_url = settings.LITELLM_BASE_URL
@@ -56,8 +58,7 @@ def _configure_dspy() -> str:
         api_key=api_key,
         temperature=0.0,
     )
-    dspy.configure(lm=lm)
-    return model_id
+    return lm, model_id
 
 
 def refine_scaffold(
@@ -77,8 +78,12 @@ def refine_scaffold(
     write to `refinement_run`.
     """
 
-    vlm_model = _configure_dspy()
-    image = dspy.Image.from_bytes(page_image_bytes, mime_type="image/png")
+    lm, vlm_model = _build_lm()
+    # DSPy 3.x exposes from_PIL / from_file / from_url. Decode the page
+    # bytes via Pillow then hand the PIL image over.
+    pil_image = PILImage.open(io.BytesIO(page_image_bytes))
+    pil_image.load()  # force-decode now so the BytesIO can be GC'd
+    image = dspy.Image.from_PIL(pil_image)
     scaffold_blob = json.dumps(_compact_scaffold(docling_scaffold), indent=2)
     schema_blob = "\n".join(field_keys)
 
@@ -86,11 +91,15 @@ def refine_scaffold(
 
     started_ms = time.perf_counter()
     try:
-        prediction = predictor(
-            page_image=image,
-            docling_scaffold=scaffold_blob,
-            field_schema=schema_blob,
-        )
+        # `dspy.context` scopes the LM to this async task, unlike
+        # `dspy.configure` which is single-task and errors when called
+        # from a different async task than the one that initialised it.
+        with dspy.context(lm=lm):
+            prediction = predictor(
+                page_image=image,
+                docling_scaffold=scaffold_blob,
+                field_schema=schema_blob,
+            )
     except Exception:
         logger.exception("VLM refinement call failed")
         raise
@@ -102,7 +111,7 @@ def refine_scaffold(
     result = RefinementResult(arq_trace=arq, patches=patches)
     scaffold_out = apply_patches(docling_scaffold, patches)
 
-    token_usage = _extract_token_usage()
+    token_usage = _extract_token_usage(lm)
 
     return RefinementOutcome(
         result=result,
@@ -168,19 +177,24 @@ def _coerce_patches(value: Any) -> list[BBoxPatch]:
     raise TypeError(f"unexpected patches type: {type(value)!r}")
 
 
-def _extract_token_usage() -> dict[str, Any] | None:
-    """Pull last-call token usage from DSPy's history. Best-effort —
-    different providers expose different shapes; we persist whatever
-    is there for later analytics."""
+def _extract_token_usage(lm: dspy.LM) -> dict[str, Any] | None:
+    """Pull last-call token usage from the bound LM's history.
+
+    Best-effort — different providers expose different shapes; we
+    persist whatever is there for later analytics. Reading from the
+    LM instance instead of `dspy.settings.lm` avoids the async-task
+    boundary issue that bit `_configure_dspy()`.
+    """
     try:
-        history = dspy.settings.lm.history if dspy.settings.lm else []
+        history = getattr(lm, "history", None) or []
         if not history:
             return None
         last = history[-1]
+        usage = last.get("usage", {}) or {}
         return {
-            "prompt_tokens": last.get("usage", {}).get("prompt_tokens"),
-            "completion_tokens": last.get("usage", {}).get("completion_tokens"),
-            "total_tokens": last.get("usage", {}).get("total_tokens"),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
         }
     except Exception:  # noqa: BLE001 — observability best-effort
         return None
