@@ -28,8 +28,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
-from app.services.chandra_ocr import convert_bytes_with_chunks_async
-from app.services.docling_adapter import chunks_to_docling_document
+from app.services.architecture import DoclingArchitecture, default_architecture
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
 
 _log = logging.getLogger(__name__)
@@ -142,39 +141,31 @@ async def extract_structured(
     doc_type: DocType,
     model: str = "vision-primary",
     dpi: int = 150,
+    architecture: DoclingArchitecture | None = None,
 ) -> ExtractionPipelineResult:
-    """One Chandra call + page render + LLM call → typed result.
+    """One extractor call + page render + LLM call → typed result.
 
-    Pages are always rendered (regardless of model) so the persistence layer
-    can cache them — this is what powers fast bbox overlays in the review UI.
-    The LLM only receives images when the model is vision-capable.
+    The Docling architecture is what owns the OCR provider choice
+    (Chandra today). Pages are always rendered regardless of LLM choice
+    so the persistence layer can cache them for the review UI; the LLM
+    only receives images when the model is vision-capable.
     """
     schema = _SCHEMA_BY_TYPE[doc_type]
     prompt_intro = _PROMPT_BY_TYPE[doc_type]
+    arch = architecture or default_architecture()
 
     overall_start = time.perf_counter()
 
-    # Always render pages — needed for the review UI even on text-only models.
-    chandra_task = asyncio.create_task(
-        convert_bytes_with_chunks_async(pdf_bytes, filename)
-    )
+    # Run extraction (Chandra OCR → DoclingDocument) in parallel with
+    # page rendering. Page PNGs are needed for the LLM call (vision
+    # models) and for the persistence layer (review UI bbox overlays).
+    extract_task = asyncio.create_task(arch.extract(pdf_bytes, filename))
     pages_task = asyncio.create_task(_render_pages(pdf_bytes, dpi))
-    chandra_result, rendered_pages = await asyncio.gather(chandra_task, pages_task)
+    artifacts, rendered_pages = await asyncio.gather(extract_task, pages_task)
 
-    if not chandra_result.success:
-        raise RuntimeError(f"Chandra convert failed: {chandra_result.error}")
-
-    docling_doc = chunks_to_docling_document(
-        chandra_result.chunks,
-        name=filename,
-        page_count=chandra_result.page_count,
-    )
-    docling_dict = docling_doc.export_to_dict(
+    docling_dict = artifacts.docling_doc.export_to_dict(
         mode="json", exclude_none=True, coord_precision=2
     )
-    # Chunks mode does not populate the SDK's `.markdown` field; derive an
-    # LLM-friendly view from the DoclingDocument so we keep one source of truth.
-    markdown_view = docling_doc.export_to_markdown()
 
     if _is_vision_model(model):
         capped = rendered_pages[:_MAX_IMAGES_PER_REQUEST]
@@ -193,7 +184,7 @@ async def extract_structured(
     agent = _build_agent(model, schema)
     user_message: list = [
         prompt_intro,
-        f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{markdown_view}",
+        f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{artifacts.markdown}",
         *llm_images,
     ]
     run = await agent.run(user_message)
@@ -201,11 +192,11 @@ async def extract_structured(
     return ExtractionPipelineResult(
         doc_type=doc_type,
         model=model,
-        page_count=chandra_result.page_count,
+        page_count=artifacts.page_count,
         extracted=run.output.model_dump(),
-        markdown=markdown_view,
+        markdown=artifacts.markdown,
         docling_doc=docling_dict,
-        checkpoint_id=chandra_result.checkpoint_id,
+        checkpoint_id=artifacts.checkpoint_id,
         duration_ms=int((time.perf_counter() - overall_start) * 1000),
         pages=rendered_pages,
     )
