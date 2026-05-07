@@ -274,7 +274,6 @@ erDiagram
 | `litellm` | 4000 | OpenAI-compatible proxy fronting all providers |
 | `db` | 5432 | Postgres 17 |
 | `adminer` | 8081 | Browser DB inspector |
-| `mailhog` | 1025 / 8025 | SMTP capture for fastapi-users emails |
 
 ## Repo layout (relevant subset)
 

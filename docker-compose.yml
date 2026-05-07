@@ -5,7 +5,6 @@ services:
     environment:
       - OPENAPI_OUTPUT_FILE=./shared-data/openapi.json
       - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/mydatabase
-      - MAIL_SERVER=mailhog
       - ACCESS_SECRET_KEY=${ACCESS_SECRET_KEY}
       - RESET_PASSWORD_SECRET_KEY=${RESET_PASSWORD_SECRET_KEY}
       - VERIFICATION_SECRET_KEY=${VERIFICATION_SECRET_KEY}
@@ -96,14 +95,6 @@ services:
           path: ./nextjs-frontend/package.json
         - action: rebuild
           path: ./nextjs-frontend/bun.lock
-  mailhog:
-    image: mailhog/mailhog
-    ports:
-      - "1025:1025" # SMTP server
-      - "8025:8025" # Web UI
-    networks:
-      - my_network
-
   # Browser-based DB inspector — single PHP file, ~30 MB image.
   # Open http://localhost:8081 → System: PostgreSQL, Server: db,
   # User: postgres, Password: password, Database: mydatabase.
