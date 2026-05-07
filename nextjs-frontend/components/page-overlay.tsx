@@ -34,6 +34,7 @@ interface PageOverlayProps {
 	highlightedBlockId: string | null;
 	onHoverBlock: (blockId: string | null) => void;
 	scale: number;
+	onScaleChange?: (next: number) => void;
 }
 
 const ZOOM_MIN = 1;
@@ -45,6 +46,7 @@ export function PageOverlay({
 	highlightedBlockId,
 	onHoverBlock,
 	scale,
+	onScaleChange,
 }: PageOverlayProps) {
 	const [overlayVisible, setOverlayVisible] = useState(true);
 	const [opacity, setOpacity] = useState(0.4);
@@ -56,6 +58,7 @@ export function PageOverlay({
 		panX: number;
 		panY: number;
 	} | null>(null);
+	const viewportRef = useRef<HTMLDivElement>(null);
 
 	const w = pageBlocks?.width_px ?? 1;
 	const h = pageBlocks?.height_px ?? 1;
@@ -84,6 +87,29 @@ export function PageOverlay({
 		},
 		[panEnabled, pan.x, pan.y],
 	);
+
+	// Ctrl+wheel zoom — only when cursor is inside the viewer.
+	// Native listener with passive:false so preventDefault stops the
+	// browser's page-zoom shortcut. JSX onWheel can't do that in React 17+.
+	useEffect(() => {
+		const el = viewportRef.current;
+		if (!el || !onScaleChange) return;
+		const onWheel = (e: WheelEvent) => {
+			if (!(e.ctrlKey || e.metaKey)) return;
+			e.preventDefault();
+			// Trackpads emit small deltas (~5-30), wheels larger (~100). Scale
+			// the step against the current zoom so feel stays consistent at
+			// any zoom level.
+			const factor = Math.exp(-e.deltaY * 0.0025);
+			const next = Math.max(
+				ZOOM_MIN,
+				Math.min(ZOOM_MAX, scale * factor),
+			);
+			onScaleChange(next);
+		};
+		el.addEventListener("wheel", onWheel, { passive: false });
+		return () => el.removeEventListener("wheel", onWheel);
+	}, [onScaleChange, scale]);
 
 	useEffect(() => {
 		if (!isDragging) return;
@@ -147,6 +173,7 @@ export function PageOverlay({
 			    Both image and SVG share the same translate+scale transform so the
 			    polygon overlay stays aligned with the painted image at any zoom. */}
 			<div
+				ref={viewportRef}
 				onMouseDown={onMouseDown}
 				className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border bg-muted/30 ${
 					panEnabled

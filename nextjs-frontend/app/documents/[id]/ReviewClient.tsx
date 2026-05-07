@@ -292,6 +292,7 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 						highlightedBlockId={highlightedBlockId}
 						onHoverBlock={setHoveredBlock}
 						scale={scale}
+						onScaleChange={setScale}
 					/>
 				</section>
 
