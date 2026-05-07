@@ -41,6 +41,23 @@ If you find yourself running the same raw command repeatedly, propose adding it 
 - Encrypted env files (`fastapi_backend/.env`, `nextjs-frontend/.env`) are decrypted via dotenvx with `.env.keys`. Never commit `.env.keys`.
 - All LLM calls go through the LiteLLM proxy at `http://litellm:4000` (config: `litellm/config.yaml`). Don't add direct provider clients to backend code.
 
+## Git workflow — confirm before committing or pushing
+
+**Never run `git commit`, `git push`, `git branch -D`, or any other history-mutating command without explicit confirmation from the user first.** This applies even when "auto mode" is active.
+
+Expected loop:
+1. Make edits.
+2. Run tests / typecheck / lint to verify.
+3. Show `git status` + `git diff --stat` so the user can see what would be committed.
+4. **Wait for the user to say "commit" / "push" / "ok"** before running `git commit` or `git push`.
+5. After commit, **wait again** before pushing.
+
+When the user does ask for a commit, draft the message and show it for approval — don't run the commit until they confirm.
+
+Branch deletion (local or remote), force-push, and `git reset --hard` always require explicit confirmation, no exceptions.
+
+`main` is a **protected remote branch**. Local `main` should never be ahead of `origin/main`. All work happens on `feat/*` branches and lands via PR.
+
 ## Trace harness
 
 For inspecting the extraction pipeline stage-by-stage:
