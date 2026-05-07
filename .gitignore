@@ -42,3 +42,8 @@ next-env.d.ts
 
 # Uploads
 uploads/
+
+# Trace harness — per-run extraction artifacts (Chandra raw, rendered
+# page PNGs, DoclingDocument JSON, LLM I/O, timings). Reproducible via
+# `_tracer.py` inside the backend container; not source-of-truth.
+local-shared-data/traces/
