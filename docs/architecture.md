@@ -65,8 +65,6 @@ flowchart LR
         Disk[("Blob store<br/>PDFs + page PNGs<br/>/data/blobs")]
     end
 
-    Adminer["Adminer · :8081<br/>(DB inspector)"]
-
     User -->|upload PDF / review| Page
     Page --> KVP
     Page --> Canvas
@@ -103,7 +101,6 @@ flowchart LR
 
     Persist --> DB
     Blob --> Disk
-    Adminer -.->|read-only| DB
 ```
 
 ## How to read it
@@ -273,7 +270,6 @@ erDiagram
 | `backend` | 8000 | FastAPI, async SQLAlchemy, fastapi-users |
 | `litellm` | 4000 | OpenAI-compatible proxy fronting all providers |
 | `db` | 5432 | Postgres 17 |
-| `adminer` | 8081 | Browser DB inspector |
 
 ## Repo layout (relevant subset)
 
