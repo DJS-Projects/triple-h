@@ -36,6 +36,14 @@ class ExtractResponse(BaseModel):
 
 
 class StructuredExtractResponse(BaseModel):
+    """API-facing payload for `/extract/structured`.
+
+    Intentionally omits `docling_doc` and `markdown` (kept in DB for
+    replay/eval, not surfaced to the UI). `extracted` is the
+    constrained-decoded JSON for the KVP table. The visual layer is
+    served separately via the page-image + OCR-overlay routes.
+    """
+
     document_id: str
     extraction_run_id: int
     is_new_document: bool
@@ -45,7 +53,6 @@ class StructuredExtractResponse(BaseModel):
     page_count: int | None
     duration_ms: int
     extracted: dict[str, Any]
-    docling_doc: dict[str, Any]
     checkpoint_id: str | None = None
 
 
@@ -170,10 +177,16 @@ async def extract_document_structured(
         pages=[(p.page_no, p.width_px, p.height_px, p.png_bytes) for p in result.pages],
     )
 
+    # DB payload keeps the full provenance: docling_doc for replay/eval,
+    # markdown for LLM re-runs, chandra_chunks for the block-level
+    # overlay (per-block bbox + html, native from OCR — no lossy Docling
+    # round-trip). None of these cross the API boundary — only
+    # `extracted` is shipped to the UI.
     extraction_payload = {
         "extracted": result.extracted,
         "markdown": result.markdown,
         "docling_doc": result.docling_doc,
+        "chandra_chunks": result.chandra_chunks,
     }
     run = await persistence.record_extraction_run(
         session,
@@ -196,6 +209,5 @@ async def extract_document_structured(
         page_count=result.page_count,
         duration_ms=result.duration_ms,
         extracted=result.extracted,
-        docling_doc=result.docling_doc,
         checkpoint_id=result.checkpoint_id,
     )

@@ -44,7 +44,7 @@ class ExtractionArtifacts:
 
     docling_doc: DoclingDocument
     markdown: str
-    chunks_raw: list[dict[str, Any]] | None
+    chunks_raw: dict[str, Any] | list[dict[str, Any]] | None
     checkpoint_id: str | None
     page_count: int | None
 

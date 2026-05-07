@@ -114,6 +114,7 @@ class ExtractionPipelineResult:
     extracted: dict[str, Any]
     markdown: str
     docling_doc: dict[str, Any]
+    chandra_chunks: dict[str, Any] | None
     checkpoint_id: str | None
     duration_ms: int
     pages: list[RenderedPage]
@@ -206,6 +207,9 @@ async def extract_structured(
         extracted=run.output.model_dump(),
         markdown=artifacts.markdown,
         docling_doc=docling_dict,
+        chandra_chunks=artifacts.chunks_raw
+        if isinstance(artifacts.chunks_raw, dict)
+        else None,
         checkpoint_id=artifacts.checkpoint_id,
         duration_ms=int((time.perf_counter() - overall_start) * 1000),
         pages=rendered_pages,

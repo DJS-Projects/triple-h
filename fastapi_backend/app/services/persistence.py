@@ -235,6 +235,18 @@ async def get_page(
     )
 
 
+async def list_pages(
+    session: AsyncSession, document_id: uuid.UUID
+) -> list[DocumentPage]:
+    """Page rows for a document, ordered by page_no."""
+    rows = await session.scalars(
+        select(DocumentPage)
+        .where(DocumentPage.document_id == document_id)
+        .order_by(DocumentPage.page_no.asc())
+    )
+    return list(rows)
+
+
 async def get_extraction_run(
     session: AsyncSession, extraction_run_id: int
 ) -> ExtractionRun | None:
