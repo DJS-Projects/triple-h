@@ -7,18 +7,43 @@ module.exports = {
 		"./app/**/*.{js,ts,jsx,tsx,mdx}",
 		"./pages/**/*.{js,ts,jsx,tsx,mdx}",
 		"./components/**/*.{js,ts,jsx,tsx,mdx}",
-
-		// Or if using `src` directory:
 		"./src/**/*.{js,ts,jsx,tsx,mdx}",
 	],
 	theme: {
 		extend: {
+			fontFamily: {
+				display: ["var(--font-display)", "ui-serif", "Georgia"],
+				body: ["var(--font-body)", "ui-sans-serif", "system-ui"],
+				mono: ["var(--font-mono)", "ui-monospace", "Menlo"],
+			},
 			borderRadius: {
 				lg: "var(--radius)",
-				md: "calc(var(--radius) - 2px)",
-				sm: "calc(var(--radius) - 4px)",
+				md: "calc(var(--radius) + 2px)",
+				sm: "calc(var(--radius) + 1px)",
 			},
 			colors: {
+				/* bento warehouse semantic + Heng Hup brand */
+				paper: "hsl(var(--surface-paper))",
+				ink: {
+					DEFAULT: "hsl(var(--ink))",
+					mute: "hsl(var(--ink-mute))",
+				},
+				rule: {
+					DEFAULT: "hsl(var(--rule))",
+					soft: "hsl(var(--rule-soft))",
+				},
+				edit: "hsl(var(--accent-edit))",
+				ok: "hsl(var(--accent-ok))",
+				warn: "hsl(var(--accent-warn))",
+				tag: "hsl(var(--accent-tag))",
+				brand: {
+					navy: "hsl(var(--brand-navy))",
+					blue: "hsl(var(--brand-blue))",
+					deep: "hsl(var(--brand-deep))",
+					sky: "hsl(var(--brand-sky))",
+				},
+
+				/* shadcn compatibility */
 				background: "hsl(var(--background))",
 				foreground: "hsl(var(--foreground))",
 				card: {
@@ -52,13 +77,6 @@ module.exports = {
 				border: "hsl(var(--border))",
 				input: "hsl(var(--input))",
 				ring: "hsl(var(--ring))",
-				chart: {
-					1: "hsl(var(--chart-1))",
-					2: "hsl(var(--chart-2))",
-					3: "hsl(var(--chart-3))",
-					4: "hsl(var(--chart-4))",
-					5: "hsl(var(--chart-5))",
-				},
 			},
 		},
 	},
