@@ -1,20 +1,35 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi_pagination import add_pagination
 from .schemas import UserCreate, UserRead, UserUpdate
 from .users import auth_backend, fastapi_users, AUTH_URL_PATH
 from fastapi.middleware.cors import CORSMiddleware
 from .utils import simple_generate_unique_route_id
+from app.middleware import TimingMiddleware
 from app.routes.extract import router as extract_router
 from app.routes.documents import router as documents_router
 from app.routes.refine import router as refine_router
 from app.config import settings
+
+# Dedicated handler on the timing logger. Uvicorn doesn't attach a handler
+# to the root logger (it only configures its own `uvicorn.*` namespace), so
+# loggers that propagate up have nowhere to land. Scoped here so we don't
+# accidentally enable INFO across every third-party library logger that
+# otherwise propagates to root.
+_timing_logger = logging.getLogger("triple_h.timing")
+_timing_logger.setLevel(logging.INFO)
+if not _timing_logger.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("[%(name)s] %(message)s"))
+    _timing_logger.addHandler(_h)
+    _timing_logger.propagate = False
 
 app = FastAPI(
     generate_unique_id_function=simple_generate_unique_route_id,
     openapi_url=settings.OPENAPI_URL,
 )
 
-# Middleware for CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -22,6 +37,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Outermost: wraps CORS + all routes so timing captures total request cost
+app.add_middleware(TimingMiddleware)
 
 # Include authentication and user management routes
 app.include_router(
