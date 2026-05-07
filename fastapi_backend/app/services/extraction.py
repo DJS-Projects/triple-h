@@ -142,7 +142,7 @@ async def extract_structured(
     filename: str,
     *,
     doc_type: DocType | None = None,
-    model: str = "vision-primary",
+    model: str = "gemma-4-31b",
     dpi: int = 150,
     architecture: DoclingArchitecture | None = None,
 ) -> ExtractionPipelineResult:

@@ -44,13 +44,13 @@ def _build_lm() -> tuple[dspy.LM, str]:
     """Construct a DSPy LM bound to our LiteLLM virtual model.
 
     Returns the LM plus the model id we want to record on the
-    `refinement_run` row. Pinned to `openai/refinement-vlm` so swapping
+    `refinement_run` row. Pinned to `openai/gemma-4-31b` so swapping
     the underlying provider only requires editing `litellm/config.yaml`.
     """
 
     base_url = settings.LITELLM_BASE_URL
     api_key = settings.LITELLM_MASTER_KEY or "sk-litellm-local"
-    model_id = "openai/refinement-vlm"
+    model_id = "openai/gemma-4-31b"
 
     lm = dspy.LM(
         model_id,

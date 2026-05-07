@@ -8,6 +8,7 @@ POST /extract/structured  — Full pipeline: Chandra + page render + LLM →
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -56,8 +57,61 @@ class StructuredExtractResponse(BaseModel):
     checkpoint_id: str | None = None
 
 
+class ExtractionModelOption(BaseModel):
+    """One row in the FE model dropdown."""
+
+    id: str
+    label: str
+    provider: str
+    supports_multi_image: bool
+    is_default: bool = False
+    note: str | None = None
+
+
+# Source of truth for the FE model dropdown. Keep in sync with
+# litellm/config.yaml — adding a model here without a matching entry
+# there will fail at request time.
+EXTRACTION_MODELS: list[ExtractionModelOption] = [
+    ExtractionModelOption(
+        id="gemma-4-31b",
+        label="Gemma 4 31B (vision)",
+        provider="Google AI Studio",
+        supports_multi_image=True,
+        is_default=True,
+        note="Default. Open-weights, free tier via Google AI Studio.",
+    ),
+    ExtractionModelOption(
+        id="groq-llama4-scout",
+        label="Llama 4 Scout 17B (vision)",
+        provider="Groq",
+        supports_multi_image=True,
+        note="Open-weights. Fast. Watch for max_completion_tokens cutoff on long schemas.",
+    ),
+    ExtractionModelOption(
+        id="groq-llama4-maverick",
+        label="Llama 4 Maverick 17B 128e (vision)",
+        provider="Groq",
+        supports_multi_image=True,
+        note="Open-weights. Larger MoE — better recall, slower.",
+    ),
+    ExtractionModelOption(
+        id="nim-llama-90b-vision",
+        label="Llama 3.2 90B Vision",
+        provider="NVIDIA NIM",
+        supports_multi_image=False,
+        note="Open-weights. Single-image only — single-page docs only.",
+    ),
+]
+
+
 def _blob_store() -> BlobStore:
     return get_blob_store()
+
+
+@router.get("/extract/models", response_model=list[ExtractionModelOption])
+async def list_extraction_models() -> list[ExtractionModelOption]:
+    """Return the model menu shown in the FE upload dropdown."""
+    return EXTRACTION_MODELS
 
 
 @router.post("/extract", response_model=ExtractResponse)
@@ -110,9 +164,12 @@ async def extract_document_structured(
     model: Annotated[
         str,
         Form(
-            description="LiteLLM virtual model name (vision-primary, vision-fallback-1, ...)"
+            description=(
+                "LiteLLM model id (gemma-4-31b, gemini-2.5-flash, ...). "
+                "See GET /extract/models for the full list."
+            )
         ),
-    ] = "vision-primary",
+    ] = "gemma-4-31b",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
     user: User = Depends(get_system_user),
     session: AsyncSession = Depends(get_async_session),
@@ -203,6 +260,100 @@ async def extract_document_structured(
         document_id=str(document.document_id),
         extraction_run_id=run.extraction_run_id,
         is_new_document=is_new,
+        filename=document.filename,
+        doc_type=result.doc_type,
+        model=result.model,
+        page_count=result.page_count,
+        duration_ms=result.duration_ms,
+        extracted=result.extracted,
+        checkpoint_id=result.checkpoint_id,
+    )
+
+
+class ReextractRequest(BaseModel):
+    """Body for re-running the LLM pipeline against an already-uploaded doc."""
+
+    doc_type: DocType | None = None
+    model: str = "gemma-4-31b"
+    dpi: int = 150
+
+
+@router.post(
+    "/documents/{document_id}/reextract",
+    response_model=StructuredExtractResponse,
+)
+async def reextract_document(
+    document_id: uuid.UUID,
+    body: ReextractRequest,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    blob_store: Annotated[BlobStore, Depends(_blob_store)],
+) -> StructuredExtractResponse:
+    """Re-run Chandra + LLM extraction for an existing document.
+
+    Pulls the original PDF bytes back out of blob storage, drives the
+    full pipeline, persists a new ExtractionRun (the previous one is
+    automatically demoted by `record_extraction_run`).
+
+    Idempotent: appending a new run never overwrites edits — field
+    reviews remain attached to whichever run they were made on.
+    """
+    document = await persistence.get_document(session, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    try:
+        file_bytes = await blob_store.get(document.blob_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=410, detail="original document blob missing"
+        ) from exc
+
+    try:
+        result = await extract_structured(
+            file_bytes,
+            document.filename,
+            doc_type=body.doc_type,
+            model=body.model,
+            dpi=body.dpi,
+        )
+    except RuntimeError as exc:
+        msg = str(exc)
+        if msg.startswith("Chandra"):
+            raise HTTPException(status_code=502, detail=f"chandra: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"llm: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"llm: {exc}") from exc
+
+    # Re-render pages — Chandra page count or DPI may have changed,
+    # and re-running gives us a fresh chandra_chunks coord space.
+    await persistence.record_pages(
+        session,
+        blob_store=blob_store,
+        document=document,
+        pages=[(p.page_no, p.width_px, p.height_px, p.png_bytes) for p in result.pages],
+    )
+
+    extraction_payload = {
+        "extracted": result.extracted,
+        "markdown": result.markdown,
+        "docling_doc": result.docling_doc,
+        "chandra_chunks": result.chandra_chunks,
+    }
+    run = await persistence.record_extraction_run(
+        session,
+        document=document,
+        doc_type=result.doc_type,
+        llm_model=result.model,
+        checkpoint_id=result.checkpoint_id,
+        duration_ms=result.duration_ms,
+        payload=extraction_payload,
+    )
+    await session.commit()
+
+    return StructuredExtractResponse(
+        document_id=str(document.document_id),
+        extraction_run_id=run.extraction_run_id,
+        is_new_document=False,
         filename=document.filename,
         doc_type=result.doc_type,
         model=result.model,

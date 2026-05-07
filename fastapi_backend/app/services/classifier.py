@@ -46,7 +46,7 @@ class _ClassifierOutput(BaseModel):
 
 
 class GemmaClassifier:
-    """Vision classifier routed through LiteLLM `refinement-vlm` virtual model.
+    """Vision classifier routed through LiteLLM `gemma-4-31b` model.
 
     Cost note: a single low-DPI page is sent (~50KB PNG, ~500 input tokens
     once base64-encoded). Latency dominated by network round-trip, not
@@ -55,7 +55,7 @@ class GemmaClassifier:
 
     name = "gemma-classifier"
 
-    def __init__(self, model: str = "refinement-vlm", dpi: int = 100) -> None:
+    def __init__(self, model: str = "gemma-4-31b", dpi: int = 100) -> None:
         self.model = model
         self.dpi = dpi
 

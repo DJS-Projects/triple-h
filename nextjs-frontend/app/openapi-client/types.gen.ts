@@ -239,7 +239,7 @@ export type BodyExtractExtractDocumentStructured = {
     doc_type?: string | null;
     /**
      * Model
-     * LiteLLM virtual model name (vision-primary, vision-fallback-1, ...)
+     * LiteLLM model id (gemma-4-31b, gemini-2.5-flash, ...). See GET /extract/models for the full list.
      */
     model?: string;
     /**
@@ -345,6 +345,37 @@ export type ExtractResponse = {
      * Checkpoint Id
      */
     checkpoint_id?: string | null;
+};
+
+/**
+ * ExtractionModelOption
+ * One row in the FE model dropdown.
+ */
+export type ExtractionModelOption = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Supports Multi Image
+     */
+    supports_multi_image: boolean;
+    /**
+     * Is Default
+     */
+    is_default?: boolean;
+    /**
+     * Note
+     */
+    note?: string | null;
 };
 
 /**
@@ -573,6 +604,25 @@ export type PatchExtractionResponse = {
      * Reviews
      */
     reviews: Array<FieldReviewSummary>;
+};
+
+/**
+ * ReextractRequest
+ * Body for re-running the LLM pipeline against an already-uploaded doc.
+ */
+export type ReextractRequest = {
+    /**
+     * Doc Type
+     */
+    doc_type?: 'delivery_order' | 'weighing_bill' | 'invoice' | 'petrol_bill' | null;
+    /**
+     * Model
+     */
+    model?: string;
+    /**
+     * Dpi
+     */
+    dpi?: number;
 };
 
 /**
@@ -1173,6 +1223,23 @@ export type UsersUsersPatchUserResponses = {
 
 export type UsersUsersPatchUserResponse = UsersUsersPatchUserResponses[keyof UsersUsersPatchUserResponses];
 
+export type ExtractListExtractionModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/extract/models';
+};
+
+export type ExtractListExtractionModelsResponses = {
+    /**
+     * Response Extract-List Extraction Models
+     * Successful Response
+     */
+    200: Array<ExtractionModelOption>;
+};
+
+export type ExtractListExtractionModelsResponse = ExtractListExtractionModelsResponses[keyof ExtractListExtractionModelsResponses];
+
 export type ExtractExtractDocumentData = {
     body: BodyExtractExtractDocument;
     path?: never;
@@ -1222,6 +1289,36 @@ export type ExtractExtractDocumentStructuredResponses = {
 };
 
 export type ExtractExtractDocumentStructuredResponse = ExtractExtractDocumentStructuredResponses[keyof ExtractExtractDocumentStructuredResponses];
+
+export type ExtractReextractDocumentData = {
+    body: ReextractRequest;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/reextract';
+};
+
+export type ExtractReextractDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExtractReextractDocumentError = ExtractReextractDocumentErrors[keyof ExtractReextractDocumentErrors];
+
+export type ExtractReextractDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: StructuredExtractResponse;
+};
+
+export type ExtractReextractDocumentResponse = ExtractReextractDocumentResponses[keyof ExtractReextractDocumentResponses];
 
 export type DocumentsListDocumentsData = {
     body?: never;

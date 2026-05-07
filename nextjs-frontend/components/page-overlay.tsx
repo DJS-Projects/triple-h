@@ -50,7 +50,7 @@ export function PageOverlay({
 	const h = pageBlocks?.height_px ?? 1;
 
 	return (
-		<div className="flex flex-col gap-2">
+		<div className="flex min-h-0 flex-1 flex-col gap-2">
 			<div className="flex flex-wrap items-center gap-3 text-xs">
 				<label className="flex items-center gap-2">
 					<input
@@ -73,7 +73,7 @@ export function PageOverlay({
 						step={0.05}
 						value={opacity}
 						onChange={(e) => setOpacity(Number(e.target.value))}
-						className="h-1 w-24 accent-brand-deep"
+						className="mx-2 w-24 accent-brand-deep"
 					/>
 				</label>
 				<span className="ml-auto font-mono text-muted-foreground">
@@ -81,17 +81,17 @@ export function PageOverlay({
 				</span>
 			</div>
 
-			<div
-				className="relative overflow-hidden rounded-md border bg-muted/30"
-				style={{ aspectRatio: `${w} / ${h}` }}
-			>
+			{/* Vertical-fit: image always fits within parent height, letterboxes
+			    horizontally if narrower. SVG uses preserveAspectRatio=meet so the
+			    overlay coords stay aligned with the painted image area. */}
+			<div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
 				{/* biome-ignore lint/performance/noImgElement: dynamic upstream proxy */}
 				<img
 					src={imageSrc}
 					alt="Document page"
 					width={w}
 					height={h}
-					className="absolute inset-0 h-full w-full object-contain select-none"
+					className="max-h-full max-w-full select-none object-contain"
 					draggable={false}
 				/>
 
@@ -99,12 +99,13 @@ export function PageOverlay({
 					<svg
 						viewBox={`0 0 ${w} ${h}`}
 						preserveAspectRatio="xMidYMid meet"
-						className="absolute inset-0 h-full w-full"
+						className="pointer-events-none absolute inset-0 h-full w-full"
 						style={{
 							transform: `scale(${scale})`,
-							transformOrigin: "top left",
+							transformOrigin: "center center",
 						}}
 					>
+						<g className="pointer-events-auto">
 						{pageBlocks.blocks.map((b) => {
 							const isOn = highlightedBlockId === b.block_id;
 							const fill =
@@ -130,6 +131,7 @@ export function PageOverlay({
 								</polygon>
 							);
 						})}
+						</g>
 					</svg>
 				) : null}
 			</div>
@@ -155,7 +157,7 @@ export function ScaleSlider({ scale, onChange }: ScaleSliderProps) {
 				step={0.005}
 				value={scale}
 				onChange={(e) => onChange(Number(e.target.value))}
-				className="h-1 w-32 accent-brand-deep"
+				className="mx-2 w-32 accent-brand-deep"
 			/>
 			<span className="font-mono tabular-nums text-muted-foreground">
 				{scale.toFixed(3)}×

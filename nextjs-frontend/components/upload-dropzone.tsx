@@ -1,21 +1,47 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { uploadAndExtract } from "@/lib/api";
+import { fetchExtractionModels, uploadAndExtract } from "@/lib/api";
 import { DOC_TYPE_LABELS, DOC_TYPES, uploadSchema } from "@/lib/definitions";
 
 type Status = "idle" | "selected" | "uploading" | "error";
+
+interface ExtractionModel {
+	id: string;
+	label: string;
+	provider: string;
+	supports_multi_image: boolean;
+	is_default: boolean;
+	note: string | null;
+}
 
 export function UploadDropzone() {
 	const router = useRouter();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [file, setFile] = useState<File | null>(null);
 	const [docType, setDocType] = useState<string>("");
+	const [model, setModel] = useState<string>("");
+	const [models, setModels] = useState<ExtractionModel[]>([]);
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
 	const [dragOver, setDragOver] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		fetchExtractionModels().then((res) => {
+			if (cancelled) return;
+			if ("error" in res) return; // silent — keep BE default
+			const list = res as ExtractionModel[];
+			setModels(list);
+			const defaultModel = list.find((m) => m.is_default);
+			if (defaultModel) setModel(defaultModel.id);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const pickFile = useCallback((next: File | null) => {
 		if (!next) {
@@ -44,6 +70,7 @@ export function UploadDropzone() {
 		const fd = new FormData();
 		fd.append("file", file);
 		fd.append("doc_type", docType);
+		if (model) fd.append("model", model);
 
 		const result = await uploadAndExtract(fd);
 		if ("error" in result) {
@@ -52,7 +79,7 @@ export function UploadDropzone() {
 			return;
 		}
 		router.push(`/documents/${result.documentId}`);
-	}, [file, docType, router]);
+	}, [file, docType, model, router]);
 
 	const onDrop = useCallback(
 		(e: React.DragEvent<HTMLDivElement>) => {
@@ -130,6 +157,27 @@ export function UploadDropzone() {
 					</select>
 				</label>
 
+				<label className="flex items-center gap-2 text-sm">
+					<span className="text-muted-foreground">Model</span>
+					<select
+						value={model}
+						onChange={(e) => setModel(e.target.value)}
+						disabled={status === "uploading" || models.length === 0}
+						className="rounded-md border bg-background px-2 py-1 text-sm"
+					>
+						{models.length === 0 ? (
+							<option value="">Loading…</option>
+						) : (
+							models.map((m) => (
+								<option key={m.id} value={m.id}>
+									{m.label} · {m.provider}
+									{!m.supports_multi_image ? " · 1 page only" : ""}
+								</option>
+							))
+						)}
+					</select>
+				</label>
+
 				<Button
 					onClick={submit}
 					disabled={!file || status === "uploading"}
@@ -138,6 +186,17 @@ export function UploadDropzone() {
 					{status === "uploading" ? "Extracting…" : "Extract"}
 				</Button>
 			</div>
+
+			{model ? (
+				(() => {
+					const sel = models.find((m) => m.id === model);
+					return sel?.note ? (
+						<p className="font-mono text-[11px] text-muted-foreground">
+							{sel.note}
+						</p>
+					) : null;
+				})()
+			) : null}
 
 			{status === "uploading" ? (
 				<p className="font-mono text-xs text-muted-foreground">
