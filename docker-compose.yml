@@ -104,6 +104,21 @@ services:
     networks:
       - my_network
 
+  # Browser-based DB inspector — single PHP file, ~30 MB image.
+  # Open http://localhost:8081 → System: PostgreSQL, Server: db,
+  # User: postgres, Password: password, Database: mydatabase.
+  adminer:
+    image: adminer:5
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: pepa-linha-dark
+    depends_on:
+      - db
+    networks:
+      - my_network
+
 volumes:
   postgres_data:
   hf-cache:
