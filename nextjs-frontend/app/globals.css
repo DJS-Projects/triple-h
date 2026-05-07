@@ -18,11 +18,11 @@
 		--surface-paper: 48 27% 97%; /* #FAFAF7 cream receipt */
 		--surface-card: 0 0% 100%;
 
-		/* brand navies — sampled from henghup.com logo + hero */
-		--brand-navy: 213 51% 25%; /* #1F3A5F   wordmark navy, heading ink */
-		--brand-blue: 210 57% 42%; /* #2E6FA8   mid-steel, links / status */
-		--brand-deep: 207 86% 38%; /* #0B598E   deep cta */
-		--brand-sky:  199 71% 66%; /* #6EC1E4   hero highlight, banner strip */
+		/* brand navies — sampled directly from henghup.com logo PNG */
+		--brand-navy: 219 51% 20%; /* #192B4D  wordmark + chinese characters */
+		--brand-blue: 219 50% 45%; /* #3962AD  filled-diamond accent */
+		--brand-deep: 201 93% 21%; /* #044567  outline-diamond deep cta */
+		--brand-sky:  219 50% 78%; /* #b8c8e0  pale-blue surface tint */
 
 		/* semantic ink (uses brand navy so every label reads as branded) */
 		--ink: var(--brand-navy);
@@ -43,7 +43,7 @@
 		--card-foreground: var(--ink);
 		--popover: var(--surface-card);
 		--popover-foreground: var(--ink);
-		--primary: var(--ink);
+		--primary: var(--brand-deep);
 		--primary-foreground: var(--surface-paper);
 		--secondary: 60 11% 95%;
 		--secondary-foreground: var(--ink);
@@ -55,7 +55,7 @@
 		--destructive-foreground: var(--surface-paper);
 		--border: var(--rule-soft);
 		--input: var(--rule-soft);
-		--ring: var(--ink);
+		--ring: var(--brand-blue);
 		--radius: 0; /* warehouse: zero-radius default; chips override to 2px */
 	}
 }

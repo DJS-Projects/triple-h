@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Open_Sans, Rubik } from "next/font/google";
+import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 const rubik = Rubik({
@@ -38,6 +39,7 @@ export default function RootLayout({
 			<body
 				className={`${rubik.variable} ${openSans.variable} ${plexMono.variable} font-body antialiased`}
 			>
+				<SiteHeader />
 				{children}
 			</body>
 		</html>
