@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <title>Heng Hup Holdings</title>
+  <g fill="#192B4D">
+    <rect x="20" y="40" width="80" height="80" transform="rotate(45 60 80)" />
+    <rect x="140" y="40" width="80" height="80" transform="rotate(45 180 80)" />
+  </g>
+  <rect x="80" y="55" width="80" height="80" transform="rotate(45 120 95)" fill="#3962AD" />
+  <text x="120" y="208" text-anchor="middle" font-family="'Arial Black', system-ui, sans-serif" font-weight="900" font-size="68" letter-spacing="2" fill="#3962AD">HHH</text>
+</svg>
