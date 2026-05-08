@@ -157,6 +157,7 @@ dev = [
     { name = "python-dotenv" },
     { name = "ruff" },
     { name = "types-aiofiles" },
+    { name = "types-python-dateutil" },
     { name = "watchdog" },
 ]
 
@@ -194,6 +195,7 @@ dev = [
     { name = "python-dotenv", specifier = ">=1.0.1,<2" },
     { name = "ruff", specifier = ">=0.11.4,<0.12" },
     { name = "types-aiofiles", specifier = ">=24.1,<25" },
+    { name = "types-python-dateutil", specifier = ">=2.9,<3" },
     { name = "watchdog", specifier = ">=5.0.3,<6" },
 ]
 
@@ -2288,6 +2290,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/48/c64471adac9206cc844afb33ed311ac5a65d2f59df3d861e0f2d0cad7414/types_aiofiles-24.1.0.20250822.tar.gz", hash = "sha256:9ab90d8e0c307fe97a7cf09338301e3f01a163e39f3b529ace82466355c84a7b", size = 14484 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/8e/5e6d2215e1d8f7c2a94c6e9d0059ae8109ce0f5681956d11bb0a228cef04/types_aiofiles-24.1.0.20250822-py3-none-any.whl", hash = "sha256:0ec8f8909e1a85a5a79aed0573af7901f53120dd2a29771dd0b3ef48e12328b0", size = 14322 },
+]
+
+[[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20260508"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bd/9b/ee1674cbe9ec50bb824f35a5dc0ce5fd1f1b6196ba1213e3fe6f33b4ce32/types_python_dateutil-2.9.0.20260508.tar.gz", hash = "sha256:596a6d63d81f587bf04c8254fb78df9d2344e915ce67948d7400512e3a6206d5", size = 17033 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/7c/1788ff10edf56031d74ad3fba40947e0e8b82e3a529b30e6b7d71c191dec/types_python_dateutil-2.9.0.20260508-py3-none-any.whl", hash = "sha256:bfc6fd2d81aa86e5ac97206a64304f6bd247426eedbca9b98619bbc48c6a1c10", size = 18425 },
 ]
 
 [[package]]

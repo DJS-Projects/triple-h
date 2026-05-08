@@ -49,6 +49,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pydantic-evals>=1.80.0",
     "types-aiofiles>=24.1,<25",
+    "types-python-dateutil>=2.9,<3",
 ]
 
 [tool.uv]
