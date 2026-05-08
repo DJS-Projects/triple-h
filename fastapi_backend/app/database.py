@@ -1,5 +1,5 @@
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from urllib.parse import urlparse
 
 from fastapi import Depends

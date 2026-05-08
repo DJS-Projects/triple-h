@@ -49,4 +49,4 @@ class Settings(BaseSettings):
     BLOB_PUBLIC_BASE_URL: str | None = None  # reserved for presigned-URL backends
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue]

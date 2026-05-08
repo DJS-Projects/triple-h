@@ -88,16 +88,24 @@ def convert_with_chunks(path: str | Path, **overrides: Any) -> ConversionResult:
     to skip re-running OCR on the same document.
     """
     client = get_sync_client()
-    return client.convert(str(path), options=_build_convert_options(**overrides))
+    result = client.convert(str(path), options=_build_convert_options(**overrides))
+    assert isinstance(result, ConversionResult), (
+        "Chandra SDK returned non-ConversionResult; check output_format"
+    )
+    return result
 
 
 async def convert_with_chunks_async(
     path: str | Path, **overrides: Any
 ) -> ConversionResult:
     async with get_async_client() as client:
-        return await client.convert(
+        result = await client.convert(
             str(path), options=_build_convert_options(**overrides)
         )
+        assert isinstance(result, ConversionResult), (
+            "Chandra SDK returned non-ConversionResult; check output_format"
+        )
+        return result
 
 
 def convert_bytes_with_chunks(
@@ -140,9 +148,13 @@ def ocr_file(path: str | Path) -> OCRResult:
     `convert_with_chunks(mode="accurate")` on stamped/handwritten regions.
     """
     client = get_sync_client()
-    return client.ocr(str(path))
+    result = client.ocr(str(path))
+    assert isinstance(result, OCRResult), "Chandra SDK returned non-OCRResult"
+    return result
 
 
 async def ocr_file_async(path: str | Path) -> OCRResult:
     async with get_async_client() as client:
-        return await client.ocr(str(path))
+        result = await client.ocr(str(path))
+        assert isinstance(result, OCRResult), "Chandra SDK returned non-OCRResult"
+        return result

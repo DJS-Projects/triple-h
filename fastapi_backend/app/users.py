@@ -1,7 +1,8 @@
 import uuid
 import re
 
-from typing import AsyncGenerator, Optional, Union
+from collections.abc import AsyncGenerator
+from typing import Optional, Union
 
 from fastapi import Depends, Request
 from fastapi_users import (

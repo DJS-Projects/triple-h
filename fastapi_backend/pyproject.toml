@@ -69,6 +69,27 @@ include = ["commands"]
 [tool.hatch.build.targets.wheel]
 include = ["commands"]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+include = ["app", "tests", "tests_eval", "alembic_migrations"]
+# basedpyright reads [tool.pyright]. Drop "recommended" defaults that
+# fight project idioms — FastAPI Depends(), JSONB payloads typed Any,
+# untyped DSPy. Real type bugs still flagged by mypy strict (CI gate).
+typeCheckingMode = "standard"
+reportMissingTypeStubs = "none"
+reportCallInDefaultInitializer = "none"
+reportExplicitAny = "none"
+reportAny = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnusedCallResult = "none"
+# docling-core has internal re-export paths; we use the documented
+# top-level imports per their README.
+reportPrivateImportUsage = "none"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

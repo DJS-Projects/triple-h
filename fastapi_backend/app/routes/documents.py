@@ -40,7 +40,7 @@ class DocumentSummary(BaseModel):
     created_at: str
 
     @classmethod
-    def from_orm(cls, doc: Document) -> "DocumentSummary":
+    def from_doc(cls, doc: Document) -> "DocumentSummary":
         return cls(
             document_id=str(doc.document_id),
             filename=doc.filename,
@@ -154,7 +154,7 @@ async def list_documents(
     rows = await session.scalars(select(Document).order_by(Document.created_at.desc()))
     return cast(
         "Page[DocumentSummary]",
-        paginate([DocumentSummary.from_orm(r) for r in rows]),
+        paginate([DocumentSummary.from_doc(r) for r in rows]),
     )
 
 
@@ -210,7 +210,7 @@ async def get_document_detail(
     current = await _build_run_payload(session, run) if run is not None else None
     pages = await persistence.list_pages(session, document_id)
     return DocumentDetail(
-        document=DocumentSummary.from_orm(doc),
+        document=DocumentSummary.from_doc(doc),
         page_count=doc.page_count,
         pages=[
             PageDims(page_no=p.page_no, width_px=p.width_px, height_px=p.height_px)
