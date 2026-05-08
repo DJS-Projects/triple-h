@@ -17,7 +17,7 @@ Two principal calls used by the rest of the backend:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from datalab_sdk import AsyncDatalabClient, DatalabClient
 from datalab_sdk.models import ConvertOptions, ConversionResult, OCRResult
@@ -55,12 +55,12 @@ _DEFAULT_CONVERT_OPTIONS = dict(
 )
 
 
-def _build_convert_options(**overrides) -> ConvertOptions:
+def _build_convert_options(**overrides: Any) -> ConvertOptions:
     params = {**_DEFAULT_CONVERT_OPTIONS, **overrides}
     return ConvertOptions(**params)
 
 
-def convert_with_chunks(path: str | Path, **overrides) -> ConversionResult:
+def convert_with_chunks(path: str | Path, **overrides: Any) -> ConversionResult:
     """One-call structured conversion.
 
     Returns `ConversionResult` with `.chunks` populated:
@@ -91,7 +91,9 @@ def convert_with_chunks(path: str | Path, **overrides) -> ConversionResult:
     return client.convert(str(path), options=_build_convert_options(**overrides))
 
 
-async def convert_with_chunks_async(path: str | Path, **overrides) -> ConversionResult:
+async def convert_with_chunks_async(
+    path: str | Path, **overrides: Any
+) -> ConversionResult:
     async with get_async_client() as client:
         return await client.convert(
             str(path), options=_build_convert_options(**overrides)
@@ -99,7 +101,7 @@ async def convert_with_chunks_async(path: str | Path, **overrides) -> Conversion
 
 
 def convert_bytes_with_chunks(
-    file_bytes: bytes, filename: str, **overrides
+    file_bytes: bytes, filename: str, **overrides: Any
 ) -> ConversionResult:
     """Convenience: write bytes to a temp file, call SDK, return result.
 
@@ -116,7 +118,7 @@ def convert_bytes_with_chunks(
 
 
 async def convert_bytes_with_chunks_async(
-    file_bytes: bytes, filename: str, **overrides
+    file_bytes: bytes, filename: str, **overrides: Any
 ) -> ConversionResult:
     import tempfile
 

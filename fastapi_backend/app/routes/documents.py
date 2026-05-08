@@ -8,11 +8,11 @@ GET /documents/{id}/pages/{n}.png    — pre-rendered page PNG
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Page, paginate
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
@@ -28,6 +28,8 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 class DocumentSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     document_id: str
     filename: str
     mime_type: str
@@ -150,7 +152,10 @@ async def list_documents(
     Auth-free; no per-user scoping.
     """
     rows = await session.scalars(select(Document).order_by(Document.created_at.desc()))
-    return paginate([DocumentSummary.from_orm(r) for r in rows])
+    return cast(
+        "Page[DocumentSummary]",
+        paginate([DocumentSummary.from_orm(r) for r in rows]),
+    )
 
 
 async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPayload:

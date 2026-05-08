@@ -24,8 +24,18 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
-        additional_dependencies: ["types-aiofiles>=24.1,<25"]
-        args: [--ignore-missing-imports]
+        # Pre-commit runs mypy in an isolated venv — the project's
+        # `.venv` is invisible. Install the libs whose types/plugin we
+        # depend on (pydantic v2 plugin, ORM types) so subclass-of-Any
+        # cascade errors don't fire. Keep this list minimal; mypy
+        # config drives plugin activation (see fastapi_backend/mypy.ini).
+        additional_dependencies:
+          - "types-aiofiles>=24.1,<25"
+          - "pydantic>=2,<3"
+          - "pydantic-settings>=2,<3"
+          - "sqlalchemy>=2,<3"
+          - "fastapi-users[sqlalchemy]>=13,<14"
+        args: [--ignore-missing-imports, --config-file=fastapi_backend/mypy.ini]
         files: ^fastapi_backend/
 
   - repo: local
