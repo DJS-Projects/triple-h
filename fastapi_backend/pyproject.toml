@@ -30,6 +30,12 @@ dependencies = [
     "dspy-ai>=2.5.0,<3",
     # Pillow: image encoding for VLM payloads + page-render coord checks.
     "pillow>=10.4.0,<12",
+    # BeautifulSoup + lxml: parse Chandra-emitted block HTML (table cells with
+    # column headers) for Tier-2 anchor extraction in stage 1.
+    "beautifulsoup4>=4.12,<5",
+    "lxml>=5.3,<6",
+    # python-dateutil: tolerant date parsing across MY/ISO/dotted formats.
+    "python-dateutil>=2.9,<3",
 ]
 
 [dependency-groups]
