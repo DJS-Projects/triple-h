@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+	deleteDocument,
 	deleteFieldReview,
 	fetchExtractionModels,
 	reextractDocument,
@@ -98,6 +99,10 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 	const [scale, setScale] = useState(1);
 	const [reExtracting, setReExtracting] = useState(false);
 	const [models, setModels] = useState<ExtractionModel[]>([]);
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => {
+		setMounted(true);
+	}, []);
 	const [selectedModel, setSelectedModel] = useState<string>(
 		run?.llm_model ?? "",
 	);
@@ -172,6 +177,23 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 	}, [split.scalars, fieldPages, pageNo]);
 
 	const dirty = Object.keys(draft).length > 0;
+
+	const onDeleteDocument = () => {
+		if (
+			!window.confirm(
+				`Delete "${doc.filename}"?\n\nThis removes the file, every extraction run, and the entire audit history. It cannot be undone.`,
+			)
+		)
+			return;
+		startTransition(async () => {
+			const result = await deleteDocument(doc.document_id);
+			if ("error" in result) {
+				setError(result.error);
+				return;
+			}
+			router.push("/documents");
+		});
+	};
 
 	const onDeleteReview = (reviewId: number, fieldPath: string) => {
 		if (
@@ -268,6 +290,15 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 							? "Saving…"
 							: `Save${dirty ? ` (${Object.keys(draft).length})` : ""}`}
 					</Button>
+					<Button
+						variant="outline"
+						onClick={onDeleteDocument}
+						disabled={isPending}
+						className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+						title="Delete this document"
+					>
+						Delete
+					</Button>
 				</div>
 			</header>
 
@@ -319,8 +350,13 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 					/>
 				</section>
 
-				{/* RIGHT — tabbed, internally scrolled. */}
+				{/* RIGHT — tabbed, internally scrolled.
+				    Gate on mount: Radix Tabs' internal useId is sensitive to
+				    upstream Fiber tree drift (browser extensions, Turbopack RSC
+				    markers) under React 19, producing hydration mismatches even
+				    though server/client render identical content. */}
 				<section className="flex min-h-0 flex-col lg:overflow-hidden">
+					{!mounted ? null : (
 					<Tabs
 						defaultValue="chandra"
 						className="flex min-h-0 flex-1 flex-col gap-1.5"
@@ -472,6 +508,7 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 						</TabsContent>
 
 					</Tabs>
+					)}
 				</section>
 			</div>
 

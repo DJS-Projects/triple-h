@@ -35,9 +35,10 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en">
+		<html lang="en" suppressHydrationWarning>
 			<body
 				className={`${rubik.variable} ${openSans.variable} ${plexMono.variable} font-body antialiased`}
+				suppressHydrationWarning
 			>
 				<SiteHeader />
 				{children}
