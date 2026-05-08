@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates poppler-utils \
+      fonts-noto-core fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
@@ -13,9 +14,6 @@ ENV PATH="/root/.local/bin/:$PATH"
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen
 ENV PATH="/app/.venv/bin:$PATH"
-
-ENV HF_HOME=/root/.cache/huggingface
-RUN uv run python -c "from docling.document_converter import DocumentConverter; DocumentConverter()"
 
 COPY . .
 

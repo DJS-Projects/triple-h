@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160">
+  <title>Heng Hup Holdings</title>
+  <g fill="#192B4D">
+    <rect x="20" y="40" width="80" height="80" transform="rotate(45 60 80)" />
+    <rect x="140" y="40" width="80" height="80" transform="rotate(45 180 80)" />
+  </g>
+  <rect x="80" y="40" width="80" height="80" transform="rotate(45 120 80)" fill="#3962AD" />
+</svg>

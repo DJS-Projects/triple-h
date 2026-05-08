@@ -1,52 +1,70 @@
 # LiteLLM proxy config — Triple-H
 #
-# Virtual model names (used by backend):
-#   vision-primary    — Groq Llama 4 Scout (free, fast, vision)
-#   vision-fallback-1 — NIM Llama 3.2 90B Vision
-#   structured-primary — Doubleword Qwen3.5-397B + dottxt (text-only, schema-enforced)
-#   chat-primary       — Groq Llama 3.3 70B (text chat)
+# Open-weights models only. Hosted endpoints are fine (Groq, NIM,
+# Google AI Studio for Gemma, Doubleword) as long as the underlying
+# model is open-source — no Gemini, no GPT, no Claude.
 #
-# Fallbacks chain on rate-limit / error.
+# Model names are concrete (provider + family + size) so the FE
+# dropdown can show real choices. The proxy handles API key
+# plumbing, retries, and cross-provider fallbacks.
+#
+# Multi-image policy:
+#   - Gemma 4 31B: vision-capable, multi-image, big output budget.
+#   - Groq Llama 4 (Scout/Maverick): vision-capable, multi-image OK,
+#     but tight max_completion_tokens — must bump explicitly.
+#   - NVIDIA NIM (Llama 3.2 90B Vision): hard 1-image-per-request
+#     limit. Only useful for single-page docs / classification.
 
 model_list:
-  # ── Primary: Groq Llama 4 Scout (vision-capable) ───────────────────────
-  - model_name: vision-primary
+  # ── Groq Llama 4 (vision, multi-image, fast, free tier) ───────────────
+  - model_name: groq-llama4-scout
     litellm_params:
       model: groq/meta-llama/llama-4-scout-17b-16e-instruct
       api_key: os.environ/GROQ_API_KEY
+      max_tokens: 8192
 
-  - model_name: vision-primary-large
+  - model_name: groq-llama4-maverick
     litellm_params:
       model: groq/meta-llama/llama-4-maverick-17b-128e-instruct
       api_key: os.environ/GROQ_API_KEY
+      max_tokens: 8192
 
-  # ── Fallback: NVIDIA NIM Llama 3.2 90B Vision ──────────────────────────
-  - model_name: vision-fallback-1
+  # ── NVIDIA NIM Llama 3.2 90B Vision (1 image per request) ─────────────
+  - model_name: nim-llama-90b-vision
     litellm_params:
       model: nvidia_nim/meta/llama-3.2-90b-vision-instruct
       api_key: os.environ/NVIDIA_NIM_API_KEY
 
-  # ── Structured-output specialist: Doubleword Qwen3.5-397B (dottxt) ─────
-  # Text-only but server-enforced JSON schema via dottxt/outlines.
-  - model_name: structured-primary
+  # ── Doubleword Qwen3.5-397B (text-only, schema-enforced via dottxt) ───
+  - model_name: doubleword-qwen3.5
     litellm_params:
       model: openai/Qwen/Qwen3.5-397B-A17B-FP8-dottxt
       api_base: https://api.doubleword.ai/v1
       api_key: os.environ/DOUBLEWORD_API_KEY
 
-  # ── Text-only chat (non-vision tasks) ──────────────────────────────────
-  - model_name: chat-primary
+  # ── Groq Llama 3.3 70B (text-only chat) ───────────────────────────────
+  - model_name: groq-llama-3.3-70b
     litellm_params:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
+
+  # ── Google Gemma 4 31B (vision, open-weights, default extractor) ──────
+  - model_name: gemma-4-31b
+    litellm_params:
+      model: gemini/gemma-4-31b-it
+      api_key: os.environ/GOOGLE_API_KEY
 
 router_settings:
   routing_strategy: simple-shuffle
   num_retries: 3
   retry_after: 5
   fallbacks:
-    - vision-primary: ["vision-primary-large", "vision-fallback-1"]
-    - vision-primary-large: ["vision-fallback-1"]
+    # Multi-page extraction: prefer Gemma 4, then cascade through Groq.
+    - gemma-4-31b: ["groq-llama4-scout", "groq-llama4-maverick"]
+    - groq-llama4-scout: ["groq-llama4-maverick", "gemma-4-31b"]
+    - groq-llama4-maverick: ["gemma-4-31b"]
+    # NIM is single-image-only — no useful fallback for multi-page.
+    - nim-llama-90b-vision: ["gemma-4-31b"]
 
 litellm_settings:
   drop_params: true

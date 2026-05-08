@@ -12,12 +12,24 @@ dependencies = [
     "pydantic-settings>=2.5.2,<3",
     "fastapi-mail>=1.4.1,<2",
     "fastapi-pagination==0.13.3",
-    "docling>=2.12,<3",
-    "torch>=2.4,<3",
-    "torchvision>=0.19,<1",
+    # Schema-only Docling dependency. Provides DoclingDocument, BoundingBox,
+    # ProvenanceItem, etc. We do NOT use the full `docling` pipeline (layout
+    # models / OCR / TableFormer) — Chandra (via datalab SDK) supplies all
+    # OCR + structure, and our adapter maps it to DoclingDocument.
+    "docling-core>=2.74,<3",
     "pydantic-ai-slim[openai,google]>=1.80.0,<2",
     "pydantic-graph>=1.80.0,<2",
     "pdf2image>=1.17,<2",
+    # Official Datalab (Chandra OCR) SDK — handles auth, polling, retries.
+    "datalab-python-sdk>=0.5.0,<1",
+    # Async filesystem ops for the local blob backend.
+    "aiofiles>=24.1.0,<25",
+    # DSPy: typed Signature programming model for LLM/VLM calls. Used by
+    # app/refinement/ to keep ARQ-style reasoning checkpoints, traceable
+    # I/O, and (later) GEPA optimization on a held-out IoU eval set.
+    "dspy-ai>=2.5.0,<3",
+    # Pillow: image encoding for VLM payloads + page-render coord checks.
+    "pillow>=10.4.0,<12",
 ]
 
 [dependency-groups]
@@ -36,6 +48,7 @@ dev = [
     "mkdocs-material[imaging]>=9.6.9",
     "pytest-cov>=7.1.0",
     "pydantic-evals>=1.80.0",
+    "types-aiofiles>=24.1,<25",
 ]
 
 [tool.uv]

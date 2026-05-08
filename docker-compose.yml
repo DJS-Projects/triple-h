@@ -5,7 +5,6 @@ services:
     environment:
       - OPENAPI_OUTPUT_FILE=./shared-data/openapi.json
       - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/mydatabase
-      - MAIL_SERVER=mailhog
       - ACCESS_SECRET_KEY=${ACCESS_SECRET_KEY}
       - RESET_PASSWORD_SECRET_KEY=${RESET_PASSWORD_SECRET_KEY}
       - VERIFICATION_SECRET_KEY=${VERIFICATION_SECRET_KEY}
@@ -17,6 +16,8 @@ services:
       - CHANDRA_API_KEY=${CHANDRA_API_KEY:-}
       - LITELLM_BASE_URL=http://litellm:4000
       - HF_HOME=/root/.cache/huggingface
+      - BLOB_BACKEND=${BLOB_BACKEND:-local}
+      - BLOB_LOCAL_PATH=${BLOB_LOCAL_PATH:-/data/blobs}
     ports:
       - "8000:8000"
     networks:
@@ -24,6 +25,7 @@ services:
     volumes:
       - ./local-shared-data:/app/shared-data
       - hf-cache:/root/.cache/huggingface
+      - blob_data:/data/blobs
     depends_on:
       - db
       - litellm
@@ -93,17 +95,10 @@ services:
           path: ./nextjs-frontend/package.json
         - action: rebuild
           path: ./nextjs-frontend/bun.lock
-  mailhog:
-    image: mailhog/mailhog
-    ports:
-      - "1025:1025" # SMTP server
-      - "8025:8025" # Web UI
-    networks:
-      - my_network
-
 volumes:
   postgres_data:
   hf-cache:
+  blob_data:
 
 networks:
   my_network:

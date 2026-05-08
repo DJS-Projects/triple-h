@@ -1,60 +1,62 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Bento Warehouse — palette + tokens.
+ *
+ * Two layers:
+ *   1. shadcn-compatible vars (--background, --foreground, ...) so any
+ *      copy-pasted shadcn component keeps working.
+ *   2. Bento-specific semantic vars (--surface-paper, --rule, --accent-edit)
+ *      that drive the warehouse identity. Components consume these directly
+ *      via tailwind utilities (bg-paper, border-rule, text-edit, ...).
+ */
 @layer base {
 	:root {
-		--background: 0 0% 100%;
-		--foreground: 0 0% 3.9%;
-		--card: 0 0% 100%;
-		--card-foreground: 0 0% 3.9%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 0 0% 3.9%;
-		--primary: 0 0% 9%;
-		--primary-foreground: 0 0% 98%;
-		--secondary: 0 0% 96.1%;
-		--secondary-foreground: 0 0% 9%;
-		--muted: 0 0% 96.1%;
-		--muted-foreground: 0 0% 45.1%;
-		--accent: 0 0% 96.1%;
-		--accent-foreground: 0 0% 9%;
-		--destructive: 0 84.2% 60.2%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 89.8%;
-		--input: 0 0% 89.8%;
-		--ring: 0 0% 3.9%;
-		--chart-1: 12 76% 61%;
-		--chart-2: 173 58% 39%;
-		--chart-3: 197 37% 24%;
-		--chart-4: 43 74% 66%;
-		--chart-5: 27 87% 67%;
-		--radius: 0.5rem;
-	}
+		/* === bento warehouse palette, Heng Hup brand-locked === */
+		--surface-paper: 48 27% 97%; /* #FAFAF7 cream receipt */
+		--surface-card: 0 0% 100%;
 
-	.dark {
-		--background: 0 0% 3.9%;
-		--foreground: 0 0% 98%;
-		--card: 0 0% 3.9%;
-		--card-foreground: 0 0% 98%;
-		--popover: 0 0% 3.9%;
-		--popover-foreground: 0 0% 98%;
-		--primary: 0 0% 98%;
-		--primary-foreground: 0 0% 9%;
-		--secondary: 0 0% 14.9%;
-		--secondary-foreground: 0 0% 98%;
-		--muted: 0 0% 14.9%;
-		--muted-foreground: 0 0% 63.9%;
-		--accent: 0 0% 14.9%;
-		--accent-foreground: 0 0% 98%;
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 14.9%;
-		--input: 0 0% 14.9%;
-		--ring: 0 0% 83.1%;
-		--chart-1: 220 70% 50%;
-		--chart-2: 160 60% 45%;
-		--chart-3: 30 80% 55%;
-		--chart-4: 280 65% 60%;
-		--chart-5: 340 75% 55%;
+		/* brand navies — sampled directly from henghup.com logo PNG */
+		--brand-navy: 219 51% 20%; /* #192B4D  wordmark + chinese characters */
+		--brand-blue: 219 50% 45%; /* #3962AD  filled-diamond accent */
+		--brand-deep: 201 93% 21%; /* #044567  outline-diamond deep cta */
+		--brand-sky:  219 50% 78%; /* #b8c8e0  pale-blue surface tint */
+
+		/* semantic ink (uses brand navy so every label reads as branded) */
+		--ink: var(--brand-navy);
+		--ink-mute: 213 30% 48%; /* blue-gray for labels & muted text */
+		--rule: 213 51% 18%; /* near-black navy for heavy rules */
+		--rule-soft: 213 30% 88%; /* pale blue-gray soft separators */
+
+		/* semantic states — kept distinct from brand so meaning survives */
+		--accent-edit: 35 75% 45%; /* #C8861D amber sticker dot */
+		--accent-ok: 96 35% 35%; /* #4F7A3A stamp green */
+		--accent-warn: 9 62% 43%; /* #B23A2A failed red */
+		--accent-tag: var(--brand-blue); /* status pill = brand blue */
+
+		/* === shadcn compatibility layer === */
+		--background: var(--surface-paper);
+		--foreground: var(--ink);
+		--card: var(--surface-card);
+		--card-foreground: var(--ink);
+		--popover: var(--surface-card);
+		--popover-foreground: var(--ink);
+		--primary: var(--brand-deep);
+		--primary-foreground: var(--surface-paper);
+		--secondary: 60 11% 95%;
+		--secondary-foreground: var(--ink);
+		--muted: 60 11% 93%;
+		--muted-foreground: var(--ink-mute);
+		--accent: var(--accent-edit);
+		--accent-foreground: var(--surface-paper);
+		--destructive: var(--accent-warn);
+		--destructive-foreground: var(--surface-paper);
+		--border: var(--rule-soft);
+		--input: var(--rule-soft);
+		--ring: var(--brand-blue);
+		--radius: 0; /* warehouse: zero-radius default; chips override to 2px */
 	}
 }
 
@@ -62,8 +64,143 @@
 	* {
 		@apply border-border;
 	}
-
+	html {
+		font-feature-settings:
+			"ss01" on,
+			"cv01" on; /* Plex stylistic alternates */
+	}
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-paper text-ink;
+		background-image:
+			linear-gradient(
+				to bottom,
+				transparent 0,
+				transparent 100%
+			),
+			repeating-linear-gradient(
+				0deg,
+				rgba(26, 26, 26, 0.012) 0px,
+				rgba(26, 26, 26, 0.012) 1px,
+				transparent 1px,
+				transparent 4px
+			);
+	}
+
+	/* tabular numerics everywhere a number can show up. */
+	.font-mono,
+	.tabular {
+		font-variant-numeric: tabular-nums;
+		font-feature-settings: "tnum" 1, "zero" 1;
+	}
+}
+
+@layer components {
+	/* heavy 1px black rule between bento cells */
+	.rule {
+		@apply border-rule;
+	}
+	.rule-x {
+		@apply border-l border-rule;
+	}
+	.rule-y {
+		@apply border-t border-rule;
+	}
+
+	/* uppercase form label */
+	.label {
+		@apply font-body text-[10px] font-medium uppercase tracking-[0.14em] text-ink-mute;
+	}
+
+	/* rectangular rubber-stamp pill */
+	.stamp {
+		@apply inline-flex items-center gap-1.5 border border-rule bg-card px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wider;
+	}
+
+	/* sticker dot (square, not round — feels like adhesive marker) */
+	.dot {
+		@apply inline-block h-2 w-2;
+	}
+	.dot-edit {
+		@apply dot bg-edit;
+	}
+	.dot-ok {
+		@apply dot bg-ok;
+	}
+	.dot-warn {
+		@apply dot bg-warn;
+	}
+	.dot-tag {
+		@apply dot bg-tag;
+	}
+
+	/* hatched disabled / pending pattern (CSS only, no image) */
+	.hatched {
+		background-image: repeating-linear-gradient(
+			-45deg,
+			hsl(var(--rule-soft)) 0 4px,
+			transparent 4px 8px
+		);
+	}
+
+	/* cell — base bento tile */
+	.cell {
+		@apply bg-card;
+	}
+
+	/* page-load stagger reveal (CSS-only, no Motion lib yet) */
+	.reveal {
+		opacity: 0;
+		transform: translateY(6px);
+		animation: reveal 600ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+	}
+	@keyframes reveal {
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	/* Live Text — transparent OCR text spans over a page image.
+	 *
+	 * Selection highlight uses brand blue at 35% so the painted glyphs
+	 * underneath stay legible. Color stays transparent during selection
+	 * so the underlying image glyph is the only visible character. */
+	.text-layer ::selection {
+		background: hsl(var(--brand-blue) / 0.35);
+		color: transparent;
+	}
+	.text-layer ::-moz-selection {
+		background: hsl(var(--brand-blue) / 0.35);
+		color: transparent;
+	}
+
+	/* loading sweep — black bar wipes left to right */
+	.sweep {
+		position: relative;
+		overflow: hidden;
+	}
+	.sweep::after {
+		content: "";
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 30%;
+		background: hsl(var(--ink));
+		animation: sweep 1.4s cubic-bezier(0.7, 0, 0.3, 1) infinite;
+	}
+	@keyframes sweep {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(400%);
+		}
+	}
+	@keyframes indeterminate {
+		0% {
+			transform: translateX(0);
+		}
+		100% {
+			transform: translateX(400%);
+		}
 	}
 }

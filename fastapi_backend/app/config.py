@@ -42,5 +42,11 @@ class Settings(BaseSettings):
     LITELLM_BASE_URL: str = "http://litellm:4000"
     LITELLM_MASTER_KEY: str = "sk-triple-h-dev-key"
 
+    # Blob storage. Local for now; switch to s3/gcs/rustfs by changing
+    # BLOB_BACKEND and providing the corresponding env vars.
+    BLOB_BACKEND: str = "local"
+    BLOB_LOCAL_PATH: str = "/data/blobs"
+    BLOB_PUBLIC_BASE_URL: str | None = None  # reserved for presigned-URL backends
+
 
 settings = Settings()  # type: ignore[call-arg]
