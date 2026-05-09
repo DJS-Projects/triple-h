@@ -105,6 +105,18 @@ run = "dotenvx encrypt -fk .env.keys -f fastapi_backend/.env && dotenvx encrypt 
 description = "Decrypt all .env files"
 run = "dotenvx decrypt -fk .env.keys -f fastapi_backend/.env && dotenvx decrypt -fk .env.keys -f nextjs-frontend/.env"
 
+# Interactive: paste a secret into one of the .env files without the
+# plaintext appearing in your shell history, the agent transcript, or
+# the file itself (dotenvx encrypts it via .env.keys before write).
+# Implementation in scripts/env_addkey.py — Python stdlib only, no
+# chmod or shebang dance, cross-platform getpass for silent paste.
+#
+# Run this from your own terminal — DO NOT pipe through an agent's
+# Bash tool, since the silent paste relies on a real TTY.
+[tasks."env:addkey"]
+description = "Paste a secret into fastapi_backend/.env or nextjs-frontend/.env (encrypts via dotenvx, hides plaintext from logs)"
+run = "python3 scripts/env_addkey.py"
+
 # ── Database ────────────────────────────────────────────────────────────────
 
 [tasks."be:db:migrate"]
