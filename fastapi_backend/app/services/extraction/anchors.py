@@ -408,7 +408,8 @@ def _strip_html(html: str) -> str:
     """Convert block HTML to plain text for label-proximity scanning."""
     if not html:
         return ""
-    return BeautifulSoup(html, "lxml").get_text(separator=" ", strip=True)
+    text: str = BeautifulSoup(html, "lxml").get_text(separator=" ", strip=True)
+    return text
 
 
 def _bbox(block: dict[str, Any]) -> tuple[float, float, float, float] | None:

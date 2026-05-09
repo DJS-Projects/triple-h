@@ -253,6 +253,12 @@ async def extract_document_structured(
         "markdown": result.markdown,
         "docling_doc": result.docling_doc,
         "chandra_chunks": result.chandra_chunks,
+        "pipeline_variant": result.pipeline_variant,
+        # Envelope only present on the ARQ path. Persisted so eval (T12)
+        # can read per-field provenance offline without re-running the
+        # pipeline. FE response still ships the flat `extracted` dict —
+        # envelope is internal until the review UI redesign consumes it.
+        "envelope": result.envelope.model_dump() if result.envelope else None,
     }
     run = await persistence.record_extraction_run(
         session,
@@ -347,6 +353,12 @@ async def reextract_document(
         "markdown": result.markdown,
         "docling_doc": result.docling_doc,
         "chandra_chunks": result.chandra_chunks,
+        "pipeline_variant": result.pipeline_variant,
+        # Envelope only present on the ARQ path. Persisted so eval (T12)
+        # can read per-field provenance offline without re-running the
+        # pipeline. FE response still ships the flat `extracted` dict —
+        # envelope is internal until the review UI redesign consumes it.
+        "envelope": result.envelope.model_dump() if result.envelope else None,
     }
     run = await persistence.record_extraction_run(
         session,
