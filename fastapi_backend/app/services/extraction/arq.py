@@ -44,6 +44,8 @@ flat str fields and we want shape consistency.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
@@ -57,7 +59,7 @@ _STRICT = ConfigDict(extra="forbid")
 # ─── Shared leading-slot field descriptors ───────────────────────────────────
 
 
-def _visual_audit_field() -> Field:  # type: ignore[valid-type]
+def _visual_audit_field() -> Any:
     """First ARQ slot: page cues without OCR consultation.
 
     The "without consulting OCR" framing is intentional — paper §4.1
@@ -77,7 +79,7 @@ def _visual_audit_field() -> Field:  # type: ignore[valid-type]
     )
 
 
-def _field_grounding_field() -> Field:  # type: ignore[valid-type]
+def _field_grounding_field() -> Any:
     """Second ARQ slot: per-field visual region or NOT PRESENT.
 
     Pre-validated anchors and shape-only candidates are passed in via
@@ -104,7 +106,7 @@ def _field_grounding_field() -> Field:  # type: ignore[valid-type]
     )
 
 
-def _id_code_audit_field() -> Field:  # type: ignore[valid-type]
+def _id_code_audit_field() -> Any:
     """Third ARQ slot: ambiguous-char audit on reference codes.
 
     Critical: this slot FLAGS only. The actual character substitution
