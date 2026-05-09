@@ -41,6 +41,43 @@ If you find yourself running the same raw command repeatedly, propose adding it 
 - Encrypted env files (`fastapi_backend/.env`, `nextjs-frontend/.env`) are decrypted via dotenvx with `.env.keys`. Never commit `.env.keys`.
 - All LLM calls go through the LiteLLM proxy at `http://litellm:4000` (config: `litellm/config.yaml`). Don't add direct provider clients to backend code.
 
+## Observability stack
+
+Three subsystems wired in. All boot empty-keyed so `mise docker:up` works on a fresh clone; do the manual bootstraps below to start receiving data.
+
+### Langfuse (LLM observability) — `http://localhost:3001`
+
+Captures every LLM call (prompt, completion, tokens, cost, latency) via the LiteLLM `success_callback`. **Bootstrap:**
+
+1. `mise docker:up`
+2. Open `http://localhost:3001` → Sign up → create org + project
+3. Settings → API keys → Create new → copy **public** + **secret** keys
+4. `mise env:addkey` — add `LANGFUSE_PUBLIC_KEY`, then again for `LANGFUSE_SECRET_KEY` (target = `be`)
+5. `mise docker:up` (litellm restart picks up the keys)
+6. Trigger an extraction; calls appear under Tracing in the Langfuse UI
+
+### OpenTelemetry (HTTP / DB / pipeline-stage tracing)
+
+Auto-instruments FastAPI, httpx, asyncpg. Manual spans on each pipeline stage (chandra, render, llm). When `OTEL_EXPORTER_OTLP_ENDPOINT` is empty, spans render to backend stdout (`docker compose logs backend`). Set the endpoint to point at a collector (Jaeger / SigNoz / Grafana Tempo) when you wire one up:
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+```
+
+`TimingMiddleware` is kept alongside OTel — it emits a `Server-Timing` HTTP header + a 1-line per-request log. Browser DevTools shows the header in the Network tab; OTel is for deeper drill-downs.
+
+### GrowthBook (feature flags) — `http://localhost:3100`
+
+**Bootstrap:**
+
+1. `mise docker:up`
+2. Open `http://localhost:3100` → create org + project
+3. SDK Connections → Create → copy the **SDK key**
+4. `mise env:addkey` → add `GROWTHBOOK_CLIENT_KEY` (target = `be`)
+5. `mise docker:up` (backend restart picks up the key)
+
+Read flags via `app.observability.is_feature_on("flag_key", default=False)` — returns `default` when the SDK isn't configured / flag doesn't exist / SDK call raises. Always pick `default` so the safer code path runs when GrowthBook is down.
+
 ## Git workflow — confirm before committing or pushing
 
 **Never run `git commit`, `git push`, `git branch -D`, or any other history-mutating command without explicit confirmation from the user first.** This applies even when "auto mode" is active.
