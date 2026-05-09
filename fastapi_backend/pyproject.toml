@@ -36,6 +36,10 @@ dependencies = [
     "lxml>=5.3,<6",
     # python-dateutil: tolerant date parsing across MY/ISO/dotted formats.
     "python-dateutil>=2.9,<3",
+    # rapidfuzz: company-name canonicalization in postprocess. C++
+    # Levenshtein on alphanumeric-skeleton inputs absorbs typical OCR
+    # mangling (missing spaces, dropped punctuation) at score ~100.
+    "rapidfuzz>=3.10,<4",
 ]
 
 [dependency-groups]
