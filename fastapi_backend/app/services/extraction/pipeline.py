@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, TypeVar
 
+from opentelemetry import trace
 from pdf2image import convert_from_bytes
 from pydantic import BaseModel
 from pydantic_ai import Agent, BinaryContent, PromptedOutput
@@ -36,6 +37,7 @@ from app.services.architecture import (
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
 
 _log = logging.getLogger(__name__)
+_tracer = trace.get_tracer(__name__)
 
 # Vision providers cap how many images per request:
 #   Groq Llama-4-Scout: 5
@@ -156,61 +158,85 @@ async def extract_structured(
     """
     arch = architecture or default_architecture()
 
-    overall_start = time.perf_counter()
+    # Outer span covers the entire pipeline. Inner spans (chandra OCR,
+    # page render, LLM) hang off this so a single trace captures the
+    # whole request — easy to spot the dominant stage in flame graphs.
+    with _tracer.start_as_current_span("extract_structured") as root_span:
+        overall_start = time.perf_counter()
 
-    if doc_type is None:
-        # Classifier is a single small vision call (~1s). Sequential
-        # because the schema/prompt selected here gates the parallel
-        # extraction + render fan-out below.
-        doc_type = await arch.classify(pdf_bytes, filename)
+        if doc_type is None:
+            # Classifier is a single small vision call (~1s). Sequential
+            # because the schema/prompt selected here gates the parallel
+            # extraction + render fan-out below.
+            with _tracer.start_as_current_span("classify"):
+                doc_type = await arch.classify(pdf_bytes, filename)
 
-    schema = _SCHEMA_BY_TYPE[doc_type]
-    prompt_intro = _PROMPT_BY_TYPE[doc_type]
+        root_span.set_attribute("doc_type", doc_type)
+        root_span.set_attribute("model", model)
+        root_span.set_attribute("dpi", dpi)
 
-    # Run extraction (Chandra OCR → DoclingDocument) in parallel with
-    # page rendering. Page PNGs are needed for the LLM call (vision
-    # models) and for the persistence layer (review UI bbox overlays).
-    extract_task = asyncio.create_task(arch.extract(pdf_bytes, filename))
-    pages_task = asyncio.create_task(_render_pages(pdf_bytes, dpi))
-    artifacts, rendered_pages = await asyncio.gather(extract_task, pages_task)
+        schema = _SCHEMA_BY_TYPE[doc_type]
+        prompt_intro = _PROMPT_BY_TYPE[doc_type]
 
-    docling_dict = artifacts.docling_doc.export_to_dict(
-        mode="json", exclude_none=True, coord_precision=2
-    )
+        # Run extraction (Chandra OCR → DoclingDocument) in parallel with
+        # page rendering. Each task wrapped in its own span so the trace
+        # shows them as siblings — wall time is max(chandra, render).
+        async def _extract_traced() -> Any:
+            with _tracer.start_as_current_span("chandra_extract"):
+                return await arch.extract(pdf_bytes, filename)
 
-    if _is_vision_model(model):
-        capped = rendered_pages[:_MAX_IMAGES_PER_REQUEST]
-        if len(rendered_pages) > len(capped):
-            _log.info(
-                "Capping %d page images to %d (provider image limit)",
-                len(rendered_pages),
-                len(capped),
+        async def _render_traced() -> list[RenderedPage]:
+            with _tracer.start_as_current_span("pdf2image_render"):
+                return await _render_pages(pdf_bytes, dpi)
+
+        extract_task = asyncio.create_task(_extract_traced())
+        pages_task = asyncio.create_task(_render_traced())
+        artifacts, rendered_pages = await asyncio.gather(extract_task, pages_task)
+
+        with _tracer.start_as_current_span("docling_dump"):
+            docling_dict = artifacts.docling_doc.export_to_dict(
+                mode="json", exclude_none=True, coord_precision=2
             )
-        llm_images = [
-            BinaryContent(data=p.png_bytes, media_type="image/png") for p in capped
+
+        if _is_vision_model(model):
+            capped = rendered_pages[:_MAX_IMAGES_PER_REQUEST]
+            if len(rendered_pages) > len(capped):
+                _log.info(
+                    "Capping %d page images to %d (provider image limit)",
+                    len(rendered_pages),
+                    len(capped),
+                )
+            llm_images = [
+                BinaryContent(data=p.png_bytes, media_type="image/png") for p in capped
+            ]
+        else:
+            llm_images = []
+
+        agent = _build_agent(model, schema)
+        user_message: list[Any] = [
+            prompt_intro,
+            f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{artifacts.markdown}",
+            *llm_images,
         ]
-    else:
-        llm_images = []
+        with _tracer.start_as_current_span("llm_agent_run") as llm_span:
+            llm_span.set_attribute("page_count", len(rendered_pages))
+            llm_span.set_attribute("images_sent", len(llm_images))
+            llm_span.set_attribute("markdown_chars", len(artifacts.markdown))
+            run = await agent.run(user_message)
 
-    agent = _build_agent(model, schema)
-    user_message: list[Any] = [
-        prompt_intro,
-        f"\nOCR markdown (derived from DoclingDocument; full document text):\n\n{artifacts.markdown}",
-        *llm_images,
-    ]
-    run = await agent.run(user_message)
+        root_span.set_attribute("page_count", artifacts.page_count or 0)
 
-    return ExtractionPipelineResult(
-        doc_type=doc_type,
-        model=model,
-        page_count=artifacts.page_count,
-        extracted=run.output.model_dump(),
-        markdown=artifacts.markdown,
-        docling_doc=docling_dict,
-        chandra_chunks=artifacts.chunks_raw
-        if isinstance(artifacts.chunks_raw, dict)
-        else None,
-        checkpoint_id=artifacts.checkpoint_id,
-        duration_ms=int((time.perf_counter() - overall_start) * 1000),
-        pages=rendered_pages,
-    )
+        return ExtractionPipelineResult(
+            doc_type=doc_type,
+            model=model,
+            page_count=artifacts.page_count,
+            extracted=run.output.model_dump(),
+            markdown=artifacts.markdown,
+            docling_doc=docling_dict,
+            chandra_chunks=artifacts.chunks_raw
+            if isinstance(artifacts.chunks_raw, dict)
+            else None,
+            checkpoint_id=artifacts.checkpoint_id,
+            duration_ms=int((time.perf_counter() - overall_start) * 1000),
+            pages=rendered_pages,
+        )

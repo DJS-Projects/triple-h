@@ -7,6 +7,7 @@ from .users import auth_backend, fastapi_users, AUTH_URL_PATH
 from fastapi.middleware.cors import CORSMiddleware
 from .utils import simple_generate_unique_route_id
 from app.middleware import TimingMiddleware
+from app.observability import init_growthbook, init_otel
 from app.routes.extract import router as extract_router
 from app.routes.documents import router as documents_router
 from app.routes.refine import router as refine_router
@@ -29,6 +30,13 @@ app = FastAPI(
     generate_unique_id_function=simple_generate_unique_route_id,
     openapi_url=settings.OPENAPI_URL,
 )
+
+# Observability bootstrap. Both calls are idempotent (safe under
+# uvicorn --reload) and degrade gracefully when their backends are
+# unreachable — the app still boots if Langfuse, GrowthBook, or an
+# OTel collector are down.
+init_otel(app)
+init_growthbook()
 
 app.add_middleware(
     CORSMiddleware,

@@ -40,6 +40,20 @@ dependencies = [
     # Levenshtein on alphanumeric-skeleton inputs absorbs typical OCR
     # mangling (missing spaces, dropped punctuation) at score ~100.
     "rapidfuzz>=3.10,<4",
+    # OpenTelemetry: vendor-neutral tracing. SDK + OTLP gRPC exporter
+    # + auto-instrumentation for FastAPI / httpx / asyncpg. Console
+    # exporter is built into the SDK so dev setups get traces in
+    # docker logs without needing a collector running.
+    "opentelemetry-api>=1.27,<2",
+    "opentelemetry-sdk>=1.27,<2",
+    "opentelemetry-exporter-otlp>=1.27,<2",
+    "opentelemetry-instrumentation-fastapi>=0.50b0,<1",
+    "opentelemetry-instrumentation-httpx>=0.50b0,<1",
+    "opentelemetry-instrumentation-asyncpg>=0.50b0,<1",
+    # GrowthBook: feature-flag + experiment SDK. Talks to the
+    # self-hosted GrowthBook server (gb container in docker-compose)
+    # to fetch the current rules + assignments.
+    "growthbook>=1.2,<2",
 ]
 
 [dependency-groups]

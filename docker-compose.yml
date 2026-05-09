@@ -18,6 +18,24 @@ services:
       - HF_HOME=/root/.cache/huggingface
       - BLOB_BACKEND=${BLOB_BACKEND:-local}
       - BLOB_LOCAL_PATH=${BLOB_LOCAL_PATH:-/data/blobs}
+      # Observability — see app/observability.py. OTEL_ENABLED=true
+      # plus an empty OTEL_EXPORTER_OTLP_ENDPOINT means spans render
+      # to console (docker logs). Point endpoint at jaeger:4317 / a
+      # SigNoz collector / Grafana Tempo when you wire one up.
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-triple-h-backend}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # GrowthBook — both must be set for the SDK to boot. Until you
+      # complete the GrowthBook UI bootstrap (create project, copy
+      # SDK key) the backend treats every flag as off → safe defaults.
+      - GROWTHBOOK_API_HOST=${GROWTHBOOK_API_HOST:-http://growthbook:3100}
+      - GROWTHBOOK_CLIENT_KEY=${GROWTHBOOK_CLIENT_KEY:-}
+      # Langfuse — currently consumed by the litellm container only
+      # (success_callback). Forwarded here so any future backend-side
+      # direct Langfuse SDK calls read the same Settings.
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
     ports:
       - "8000:8000"
     networks:
