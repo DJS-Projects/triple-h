@@ -14,6 +14,13 @@
 #     but tight max_completion_tokens — must bump explicitly.
 #   - NVIDIA NIM (Llama 3.2 90B Vision): hard 1-image-per-request
 #     limit. Only useful for single-page docs / classification.
+#
+# Provider preference for Gemma 4 31B:
+#   - ollama-gemma4-31b (Ollama Cloud) is primary — faster than
+#     Google AI Studio for our doc workload and not subject to the
+#     AI-Studio daily quota.
+#   - gemma-4-31b (Google AI Studio) is the fallback for when Ollama
+#     Cloud is throttled / down.
 
 model_list:
   # ── Groq Llama 4 (vision, multi-image, fast, free tier) ───────────────
@@ -48,7 +55,21 @@ model_list:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
 
-  # ── Google Gemma 4 31B (vision, open-weights, default extractor) ──────
+  # ── Ollama Cloud Gemma 4 31B (vision, primary extractor) ──────────────
+  # Ollama Cloud (https://ollama.com) hosts Gemma 4 alongside dozens of
+  # open-weights models. Auth is Bearer-token via OLLAMA_API_KEY (issue
+  # at https://ollama.com/settings/keys). We use the OpenAI-compatible
+  # path (/v1/chat/completions) for vision-payload reliability — the
+  # native /api/chat path also works but the OpenAI-compat shape avoids
+  # an extra image-encoding code path inside LiteLLM.
+  - model_name: ollama-gemma4-31b
+    litellm_params:
+      model: openai/gemma4:31b
+      api_base: https://ollama.com/v1
+      api_key: os.environ/OLLAMA_API_KEY
+      max_tokens: 8192
+
+  # ── Google Gemma 4 31B (vision, open-weights, fallback for Ollama) ────
   - model_name: gemma-4-31b
     litellm_params:
       model: gemini/gemma-4-31b-it
@@ -59,12 +80,14 @@ router_settings:
   num_retries: 3
   retry_after: 5
   fallbacks:
-    # Multi-page extraction: prefer Gemma 4, then cascade through Groq.
-    - gemma-4-31b: ["groq-llama4-scout", "groq-llama4-maverick"]
-    - groq-llama4-scout: ["groq-llama4-maverick", "gemma-4-31b"]
-    - groq-llama4-maverick: ["gemma-4-31b"]
+    # Primary path: Ollama Cloud → Google AI Studio → Groq cascade.
+    - ollama-gemma4-31b: ["gemma-4-31b", "groq-llama4-scout", "groq-llama4-maverick"]
+    # Direct gemma-4-31b calls (legacy / FE-pinned) keep their old chain.
+    - gemma-4-31b: ["ollama-gemma4-31b", "groq-llama4-scout", "groq-llama4-maverick"]
+    - groq-llama4-scout: ["groq-llama4-maverick", "ollama-gemma4-31b", "gemma-4-31b"]
+    - groq-llama4-maverick: ["ollama-gemma4-31b", "gemma-4-31b"]
     # NIM is single-image-only — no useful fallback for multi-page.
-    - nim-llama-90b-vision: ["gemma-4-31b"]
+    - nim-llama-90b-vision: ["ollama-gemma4-31b", "gemma-4-31b"]
 
 litellm_settings:
   drop_params: true

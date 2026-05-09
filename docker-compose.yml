@@ -55,6 +55,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-triple-h-dev-key}
     networks:
       - my_network

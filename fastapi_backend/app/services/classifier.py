@@ -55,7 +55,7 @@ class GemmaClassifier:
 
     name = "gemma-classifier"
 
-    def __init__(self, model: str = "gemma-4-31b", dpi: int = 100) -> None:
+    def __init__(self, model: str = "ollama-gemma4-31b", dpi: int = 100) -> None:
         self.model = model
         self.dpi = dpi
 

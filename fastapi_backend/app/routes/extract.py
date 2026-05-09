@@ -73,12 +73,21 @@ class ExtractionModelOption(BaseModel):
 # there will fail at request time.
 EXTRACTION_MODELS: list[ExtractionModelOption] = [
     ExtractionModelOption(
-        id="gemma-4-31b",
-        label="Gemma 4 31B (vision)",
-        provider="Google AI Studio",
+        id="ollama-gemma4-31b",
+        label="Gemma 4 31B (vision, Ollama Cloud)",
+        provider="Ollama Cloud",
         supports_multi_image=True,
         is_default=True,
-        note="Default. Open-weights, free tier via Google AI Studio.",
+        note="Default. Same Gemma 4 weights as the Google AI Studio entry "
+        "but routed through Ollama Cloud — faster on our doc workload "
+        "and not subject to AI-Studio daily quota.",
+    ),
+    ExtractionModelOption(
+        id="gemma-4-31b",
+        label="Gemma 4 31B (vision, Google AI Studio)",
+        provider="Google AI Studio",
+        supports_multi_image=True,
+        note="Fallback path for Gemma 4. Open-weights, free tier.",
     ),
     ExtractionModelOption(
         id="groq-llama4-scout",
@@ -165,11 +174,11 @@ async def extract_document_structured(
         str,
         Form(
             description=(
-                "LiteLLM model id (gemma-4-31b, gemini-2.5-flash, ...). "
+                "LiteLLM model id (ollama-gemma4-31b, gemma-4-31b, ...). "
                 "See GET /extract/models for the full list."
             )
         ),
-    ] = "gemma-4-31b",
+    ] = "ollama-gemma4-31b",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
     user: User = Depends(get_system_user),
     session: AsyncSession = Depends(get_async_session),
@@ -274,7 +283,7 @@ class ReextractRequest(BaseModel):
     """Body for re-running the LLM pipeline against an already-uploaded doc."""
 
     doc_type: DocType | None = None
-    model: str = "gemma-4-31b"
+    model: str = "ollama-gemma4-31b"
     dpi: int = 150
 
 
