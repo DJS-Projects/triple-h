@@ -57,6 +57,12 @@ services:
       - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-triple-h-dev-key}
+      # Langfuse callback — captures every LLM call (prompt, response,
+      # tokens, cost, latency) into the Langfuse UI. Empty values
+      # disable the callback gracefully (LiteLLM logs a warning).
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
     networks:
       - my_network
   db:
@@ -95,6 +101,80 @@ services:
       timeout: 3s
       retries: 30
     profiles: ["test"]
+  # ── Langfuse: LLM observability (traces, prompts, costs, eval) ──────
+  # v2 minimal: single web container + dedicated Postgres. v3 adds
+  # ClickHouse + Redis + worker for higher event volume — overkill
+  # for solo-dev / single-tenant scale. Upgrade when ingestion volume
+  # demands it.
+  #
+  # First-boot bootstrap (one-time):
+  #   1. mise docker:up
+  #   2. open http://localhost:3001 → create org/project
+  #   3. settings → API keys → create new → copy public + secret keys
+  #   4. mise env:addkey  (LANGFUSE_PUBLIC_KEY then LANGFUSE_SECRET_KEY)
+  #   5. mise docker:up   (restart picks up keys for LiteLLM callback)
+  langfuse:
+    image: langfuse/langfuse:2
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-dev-langfuse-nextauth-secret-change-in-prod}
+      - SALT=${LANGFUSE_SALT:-dev-langfuse-salt-change-in-prod}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_DEFAULT_PROJECT_ROLE=ADMIN
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    networks:
+      - my_network
+
+  langfuse-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d langfuse"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - my_network
+
+  # ── GrowthBook: feature flags + experiments ─────────────────────────
+  # First-boot bootstrap (one-time):
+  #   1. mise docker:up
+  #   2. open http://localhost:3100 → create org/project
+  #   3. settings → SDK Connections → create → copy SDK key
+  #   4. mise env:addkey GROWTHBOOK_API_HOST  (default: http://growthbook:3100)
+  #   5. mise env:addkey GROWTHBOOK_CLIENT_KEY  (the SDK key from #3)
+  #   6. mise docker:up   (restart picks up keys for backend SDK)
+  growthbook:
+    image: growthbook/growthbook:latest
+    ports:
+      - "3100:3100"
+    environment:
+      - APP_ORIGIN=http://localhost:3100
+      - API_HOST=http://localhost:3100
+      - JWT_SECRET=${GROWTHBOOK_JWT_SECRET:-dev-growthbook-jwt-secret-change-in-prod}
+      - MONGODB_URI=mongodb://gb-mongo:27017/growthbook
+    depends_on:
+      - gb-mongo
+    networks:
+      - my_network
+
+  gb-mongo:
+    image: mongo:7
+    volumes:
+      - gb_mongo:/data/db
+    networks:
+      - my_network
+
   frontend:
     build:
       context: ./nextjs-frontend
@@ -124,6 +204,8 @@ volumes:
   postgres_data:
   hf-cache:
   blob_data:
+  langfuse_pg:
+  gb_mongo:
 
 networks:
   my_network:

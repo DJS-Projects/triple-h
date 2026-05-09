@@ -93,6 +93,13 @@ litellm_settings:
   drop_params: true
   set_verbose: false
   telemetry: false
+  # Send every LLM call (prompt, completion, token usage, cost,
+  # latency) to Langfuse. Auth via LANGFUSE_PUBLIC_KEY +
+  # LANGFUSE_SECRET_KEY env (set by docker-compose). When the keys
+  # are empty (first boot before Langfuse project setup), LiteLLM
+  # logs a warning and continues without the callback.
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
