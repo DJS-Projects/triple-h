@@ -3,6 +3,7 @@ python = "3.12"
 bun = "latest"
 "npm:@dotenvx/dotenvx" = "latest"
 "pipx:pre-commit" = "latest"
+node = "latest"
 
 # ── Setup ───────────────────────────────────────────────────────────────────
 
