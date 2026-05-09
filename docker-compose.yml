@@ -70,6 +70,30 @@ services:
       - my_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  # Ephemeral Postgres on host port 5433 for the auth-integration tests
+  # in tests/main/. Conftest's engine fixture runs Base.metadata.create_all
+  # then drop_all per-function, so the DB has to be separate from `db`
+  # (which holds dev data we don't want wiped). No volume — every container
+  # restart starts clean.
+  test-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      # Must match TEST_DATABASE_URL in fastapi_backend/.env. Conftest's
+      # engine fixture connects to this DB, runs create_all/drop_all per
+      # function — so it has to exist at container start.
+      POSTGRES_DB: tripleh_test
+    ports:
+      - "5433:5432"
+    networks:
+      - my_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydatabase"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    profiles: ["test"]
   frontend:
     build:
       context: ./nextjs-frontend
