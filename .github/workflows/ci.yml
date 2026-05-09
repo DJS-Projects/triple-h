@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same ref when a new push lands.
+# Saves minutes (free here, but still polite) and stops stale red Xs
+# from racing fresh ones.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Backend (FastAPI / Python 3.12 / uv) ─────────────────────────────
+  backend:
+    name: backend (lint + typecheck + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: fastapi_backend
+
+    # Postgres for the integration-leaning unit tests that go through
+    # the conftest async engine fixture (TEST_DATABASE_URL). Mirrors
+    # docker-compose.yml `test-db` service: postgres:17, db tripleh_test,
+    # creds postgres/password.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: tripleh_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tripleh_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      # Required Settings fields (app.config). LLM API keys deliberately
+      # omitted — unit tests never call out, and a missing key surfaces
+      # any test that accidentally tries to.
+      DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5433/tripleh_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5433/tripleh_test
+      ACCESS_SECRET_KEY: ci-not-a-real-secret
+      RESET_PASSWORD_SECRET_KEY: ci-not-a-real-secret
+      VERIFICATION_SECRET_KEY: ci-not-a-real-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: true
+          # Cache key includes the lock file so deps reinstall only
+          # when uv.lock changes.
+          cache-dependency-glob: fastapi_backend/uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies (frozen)
+        run: uv sync --frozen
+
+      - name: Verify lock is in sync with pyproject.toml
+        run: uv lock --check
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format --check)
+        run: uv run ruff format --check .
+
+      - name: Typecheck (mypy)
+        run: uv run mypy app/
+
+      - name: Unit tests (pytest)
+        run: uv run pytest tests/ -v
+
+  # ─── Frontend (Next.js / Bun / Biome) ─────────────────────────────────
+  frontend:
+    name: frontend (lint + typecheck + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: nextjs-frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (frozen)
+        run: bun install --frozen-lockfile
+
+      - name: Lint (biome check)
+        run: bun run lint
+
+      - name: Typecheck (tsc)
+        # tsconfig.json already sets noEmit:true, so the package.json
+        # `tsc` script is a pure type check.
+        run: bun run tsc
+
+      - name: Build (next build)
+        # Build catches errors lint + tsc miss (server component
+        # boundaries, dynamic imports, env-var missing-at-build-time).
+        # Provide minimal env required by next.config + any
+        # runtime-validated public vars.
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: bun run build
