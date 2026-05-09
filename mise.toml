@@ -3,6 +3,7 @@ python = "3.12"
 bun = "latest"
 "npm:@dotenvx/dotenvx" = "latest"
 "pipx:pre-commit" = "latest"
+node = "latest"
 
 # ── Setup ───────────────────────────────────────────────────────────────────
 
@@ -34,8 +35,22 @@ run = "cd nextjs-frontend && dotenvx run -fk ../.env.keys -- bun run dev"
 
 # ── Backend Testing ─────────────────────────────────────────────────────────
 
+[tasks."test:db:up"]
+description = "Start ephemeral test Postgres on host port 5433"
+run = "docker compose --profile test up -d --wait test-db"
+
+[tasks."test:db:down"]
+description = "Stop and remove the test Postgres container"
+run = "docker compose --profile test rm -sf test-db"
+
+[tasks."test:db:reset"]
+description = "Recreate the test Postgres (fresh schema)"
+depends = ["test:db:down"]
+run = "docker compose --profile test up -d --wait test-db"
+
 [tasks."be:test"]
-description = "Run backend unit tests"
+description = "Run backend unit tests (auto-starts test DB)"
+depends = ["test:db:up"]
 run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests/ -v"
 
 [tasks."be:test:eval"]
@@ -43,7 +58,8 @@ description = "Run E2E eval tests (requires API key)"
 run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests_eval/ -m eval -v"
 
 [tasks."be:test:all"]
-description = "Run all backend tests"
+description = "Run all backend tests (auto-starts test DB)"
+depends = ["test:db:up"]
 run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest -v"
 
 # ── Frontend Testing ────────────────────────────────────────────────────────

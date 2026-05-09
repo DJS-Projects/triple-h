@@ -1,7 +1,8 @@
 import uuid
 import re
 
-from typing import Optional
+from collections.abc import AsyncGenerator
+from typing import Optional, Union
 
 from fastapi import Depends, Request
 from fastapi_users import (
@@ -17,8 +18,9 @@ from fastapi_users.authentication import (
     JWTStrategy,
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import cast
 
 from .config import settings
 from .database import get_async_session, get_user_db
@@ -33,23 +35,25 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     reset_password_token_secret = settings.RESET_PASSWORD_SECRET_KEY
     verification_token_secret = settings.VERIFICATION_SECRET_KEY
 
-    async def on_after_register(self, user: User, request: Optional[Request] = None):
+    async def on_after_register(
+        self, user: User, request: Optional[Request] = None
+    ) -> None:
         print(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Optional[Request] = None
-    ):
+    ) -> None:
         await send_reset_password_email(user, token)
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
-    ):
+    ) -> None:
         print(f"Verification requested for user {user.id}. Verification token: {token}")
 
-    async def validate_password(
+    async def validate_password(  # type: ignore[override]
         self,
         password: str,
-        user: UserCreate,
+        user: Union[UserCreate, User],
     ) -> None:
         errors = []
 
@@ -66,14 +70,16 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             raise InvalidPasswordException(reason=errors)
 
 
-async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
+async def get_user_manager(
+    user_db: SQLAlchemyUserDatabase[User, uuid.UUID] = Depends(get_user_db),
+) -> AsyncGenerator[UserManager, None]:
     yield UserManager(user_db)
 
 
 bearer_transport = BearerTransport(tokenUrl=f"{AUTH_URL_PATH}/jwt/login")
 
 
-def get_jwt_strategy() -> JWTStrategy:
+def get_jwt_strategy() -> JWTStrategy[User, uuid.UUID]:
     return JWTStrategy(
         secret=settings.ACCESS_SECRET_KEY,
         lifetime_seconds=settings.ACCESS_TOKEN_EXPIRE_SECONDS,
@@ -115,7 +121,9 @@ async def get_system_user(
     so they work without an Authorization header. The row is created on
     first request — no migration needed.
     """
-    result = await session.execute(select(User).where(User.email == SYSTEM_USER_EMAIL))
+    result = await session.execute(
+        select(User).where(cast(ColumnElement[bool], User.email == SYSTEM_USER_EMAIL))
+    )
     user = result.scalar_one_or_none()
     if user is not None:
         return user

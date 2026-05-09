@@ -216,23 +216,25 @@ async def get_document(
 async def get_current_extraction_run(
     session: AsyncSession, document_id: uuid.UUID
 ) -> ExtractionRun | None:
-    return await session.scalar(
+    row: ExtractionRun | None = await session.scalar(
         select(ExtractionRun).where(
             ExtractionRun.document_id == document_id,
             ExtractionRun.is_current.is_(True),
         )
     )
+    return row
 
 
 async def get_page(
     session: AsyncSession, document_id: uuid.UUID, page_no: int
 ) -> DocumentPage | None:
-    return await session.scalar(
+    row: DocumentPage | None = await session.scalar(
         select(DocumentPage).where(
             DocumentPage.document_id == document_id,
             DocumentPage.page_no == page_no,
         )
     )
+    return row
 
 
 async def list_pages(
@@ -302,9 +304,10 @@ async def record_refinement_run(
 async def get_current_refinement_run(
     session: AsyncSession, extraction_run_id: int
 ) -> RefinementRun | None:
-    return await session.scalar(
+    row: RefinementRun | None = await session.scalar(
         select(RefinementRun).where(
             RefinementRun.extraction_run_id == extraction_run_id,
             RefinementRun.is_current.is_(True),
         )
     )
+    return row

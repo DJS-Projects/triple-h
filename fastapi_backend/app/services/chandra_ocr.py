@@ -17,7 +17,7 @@ Two principal calls used by the rest of the backend:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from datalab_sdk import AsyncDatalabClient, DatalabClient
 from datalab_sdk.models import ConvertOptions, ConversionResult, OCRResult
@@ -55,12 +55,12 @@ _DEFAULT_CONVERT_OPTIONS = dict(
 )
 
 
-def _build_convert_options(**overrides) -> ConvertOptions:
+def _build_convert_options(**overrides: Any) -> ConvertOptions:
     params = {**_DEFAULT_CONVERT_OPTIONS, **overrides}
     return ConvertOptions(**params)
 
 
-def convert_with_chunks(path: str | Path, **overrides) -> ConversionResult:
+def convert_with_chunks(path: str | Path, **overrides: Any) -> ConversionResult:
     """One-call structured conversion.
 
     Returns `ConversionResult` with `.chunks` populated:
@@ -88,18 +88,28 @@ def convert_with_chunks(path: str | Path, **overrides) -> ConversionResult:
     to skip re-running OCR on the same document.
     """
     client = get_sync_client()
-    return client.convert(str(path), options=_build_convert_options(**overrides))
+    result = client.convert(str(path), options=_build_convert_options(**overrides))
+    assert isinstance(result, ConversionResult), (
+        "Chandra SDK returned non-ConversionResult; check output_format"
+    )
+    return result
 
 
-async def convert_with_chunks_async(path: str | Path, **overrides) -> ConversionResult:
+async def convert_with_chunks_async(
+    path: str | Path, **overrides: Any
+) -> ConversionResult:
     async with get_async_client() as client:
-        return await client.convert(
+        result = await client.convert(
             str(path), options=_build_convert_options(**overrides)
         )
+        assert isinstance(result, ConversionResult), (
+            "Chandra SDK returned non-ConversionResult; check output_format"
+        )
+        return result
 
 
 def convert_bytes_with_chunks(
-    file_bytes: bytes, filename: str, **overrides
+    file_bytes: bytes, filename: str, **overrides: Any
 ) -> ConversionResult:
     """Convenience: write bytes to a temp file, call SDK, return result.
 
@@ -116,7 +126,7 @@ def convert_bytes_with_chunks(
 
 
 async def convert_bytes_with_chunks_async(
-    file_bytes: bytes, filename: str, **overrides
+    file_bytes: bytes, filename: str, **overrides: Any
 ) -> ConversionResult:
     import tempfile
 
@@ -138,9 +148,13 @@ def ocr_file(path: str | Path) -> OCRResult:
     `convert_with_chunks(mode="accurate")` on stamped/handwritten regions.
     """
     client = get_sync_client()
-    return client.ocr(str(path))
+    result = client.ocr(str(path))
+    assert isinstance(result, OCRResult), "Chandra SDK returned non-OCRResult"
+    return result
 
 
 async def ocr_file_async(path: str | Path) -> OCRResult:
     async with get_async_client() as client:
-        return await client.ocr(str(path))
+        result = await client.ocr(str(path))
+        assert isinstance(result, OCRResult), "Chandra SDK returned non-OCRResult"
+        return result
