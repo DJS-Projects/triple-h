@@ -49,18 +49,25 @@ depends = ["test:db:down"]
 run = "docker compose --profile test up -d --wait test-db"
 
 [tasks."be:test"]
-description = "Run backend unit tests (auto-starts test DB)"
+description = "Run backend unit tests (auto-starts + tears down test DB)"
 depends = ["test:db:up"]
-run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests/ -v"
+# Trap EXIT so the test-db container always comes down — even when
+# pytest fails or the run is interrupted with Ctrl-C. Stale containers
+# eat memory and the next `mise be:test` would hit a port-bound 5433.
+run = """
+trap 'docker compose --profile test rm -sf test-db >/dev/null 2>&1' EXIT
+cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests/ -v"""
 
 [tasks."be:test:eval"]
 description = "Run E2E eval tests (requires API key)"
 run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests_eval/ -m eval -v"
 
 [tasks."be:test:all"]
-description = "Run all backend tests (auto-starts test DB)"
+description = "Run all backend tests (auto-starts + tears down test DB)"
 depends = ["test:db:up"]
-run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest -v"
+run = """
+trap 'docker compose --profile test rm -sf test-db >/dev/null 2>&1' EXIT
+cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest -v"""
 
 # ── Frontend Testing ────────────────────────────────────────────────────────
 
