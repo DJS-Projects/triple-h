@@ -95,18 +95,6 @@ Branch deletion (local or remote), force-push, and `git reset --hard` always req
 
 `main` is a **protected remote branch**. Local `main` should never be ahead of `origin/main`. All work happens on `feat/*` branches and lands via PR.
 
-## Trace harness
+## Per-stage timing
 
-For inspecting the extraction pipeline stage-by-stage:
-
-```bash
-# End-to-end HTTP timing
-/tmp/triple-h-trace/curl-time.sh <pdf-path> [doc_type] [model]
-
-# Per-stage trace with artifact dump
-/tmp/triple-h-trace/run.sh <fixture-relative-to-fastapi_backend> [--doc-type X] [--model Y] [--chandra-format json|markdown|chunks] [--step]
-```
-
-Artifacts land in `local-shared-data/traces/<run-id>/` (host) ↔ `/app/shared-data/traces/<run-id>/` (container). Each run dumps: input PDF, Chandra raw response + markdown/json variants, rendered page PNGs, full LLM input/output, token usage, per-stage timings.
-
-`--step` drops into pdb between stages. Tracer source: `local-shared-data/_tracer.py`.
+Use OpenTelemetry spans (already wired in `app/observability.py` + `app/services/extraction/pipeline.py`). With `OTEL_EXPORTER_OTLP_ENDPOINT` empty, spans render to backend stdout — `docker compose logs backend` after a request shows `extract_structured` with child spans `classify`, `chandra_extract`, `pdf2image_render`, `docling_dump`, `llm_agent_run` and their durations. For LLM-specific drill-down (prompts, tokens, cost) use Langfuse at `http://localhost:3001`.

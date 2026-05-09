@@ -43,7 +43,14 @@ next-env.d.ts
 # Uploads
 uploads/
 
-# Trace harness — per-run extraction artifacts (Chandra raw, rendered
-# page PNGs, DoclingDocument JSON, LLM I/O, timings). Reproducible via
-# `_tracer.py` inside the backend container; not source-of-truth.
+# Trace artifacts — leftover dumps from the deleted _tracer.py. Kept
+# ignored so any future ad-hoc dump scripts don't accidentally commit
+# binary blobs.
 local-shared-data/traces/
+# Container-owned scratch / probe scripts. local-shared-data/ is bind-
+# mounted as /app/shared-data inside the backend container, so root in
+# the container creates files as root on the host. Underscore-prefixed
+# .py files are scratch (probes, tracers, one-offs) — ignore so they
+# can't sneak back into commits. openapi.json (no underscore) stays
+# tracked because the FE codegen reads it.
+local-shared-data/_*.py
