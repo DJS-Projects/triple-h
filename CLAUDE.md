@@ -66,17 +66,22 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
 
 `TimingMiddleware` is kept alongside OTel — it emits a `Server-Timing` HTTP header + a 1-line per-request log. Browser DevTools shows the header in the Network tab; OTel is for deeper drill-downs.
 
-### GrowthBook (feature flags) — `http://localhost:3100`
+### GrowthBook (feature flags) — `http://localhost:3031`
+
+Web UI on **3031**, SDK API on **3101** (host ports). Internal docker-network port for the backend SDK is `growthbook:3100`. The non-default host ports avoid colliding with a candor GrowthBook instance some dev machines run on `127.0.0.1:3030/3100`.
 
 **Bootstrap:**
 
 1. `mise docker:up`
-2. Open `http://localhost:3100` → create org + project
+2. Open `http://localhost:3031` → create org + project
 3. SDK Connections → Create → copy the **SDK key**
 4. `mise env:addkey` → add `GROWTHBOOK_CLIENT_KEY` (target = `be`)
-5. `mise docker:up` (backend restart picks up the key)
+5. Features → Add Feature → key=`use_arq_pipeline`, type=Boolean, default=false (toggle on for ARQ A/B)
+6. `mise docker:up` (backend restart picks up the key)
 
 Read flags via `app.observability.is_feature_on("flag_key", default=False)` — returns `default` when the SDK isn't configured / flag doesn't exist / SDK call raises. Always pick `default` so the safer code path runs when GrowthBook is down.
+
+**Active flag:** `use_arq_pipeline` — gates the ARQ two-stage extraction path in `app/services/extraction/pipeline.py`. Default off → legacy single-pass.
 
 ## Git workflow — confirm before committing or pushing
 

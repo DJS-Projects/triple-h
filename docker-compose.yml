@@ -165,20 +165,30 @@ services:
       - my_network
 
   # ── GrowthBook: feature flags + experiments ─────────────────────────
+  # GrowthBook image binds two ports internally:
+  #   3000 — web UI (browser)
+  #   3100 — SDK API (backend container reads from here)
+  # Host mapping uses 3031 + 3101 to avoid colliding with the candor
+  # GrowthBook instance some dev machines run on 127.0.0.1:3030/3100.
+  # Backend in the docker network still reaches the SDK on the internal
+  # port via `http://growthbook:3100` — only host mapping changed.
+  #
   # First-boot bootstrap (one-time):
   #   1. mise docker:up
-  #   2. open http://localhost:3100 → create org/project
+  #   2. open http://localhost:3031 → create org/project
   #   3. settings → SDK Connections → create → copy SDK key
-  #   4. mise env:addkey GROWTHBOOK_API_HOST  (default: http://growthbook:3100)
-  #   5. mise env:addkey GROWTHBOOK_CLIENT_KEY  (the SDK key from #3)
-  #   6. mise docker:up   (restart picks up keys for backend SDK)
+  #   4. mise env:addkey GROWTHBOOK_CLIENT_KEY  (the SDK key from #3)
+  #   5. features → Add Feature → key=use_arq_pipeline, type=Boolean,
+  #      default=false (toggle on for ARQ A/B testing)
+  #   6. mise docker:up   (backend restart picks up the key)
   growthbook:
     image: growthbook/growthbook:latest
     ports:
-      - "3100:3100"
+      - "3031:3000"  # web UI: http://localhost:3031
+      - "3101:3100"  # SDK API: http://localhost:3101 (browser/host)
     environment:
-      - APP_ORIGIN=http://localhost:3100
-      - API_HOST=http://localhost:3100
+      - APP_ORIGIN=http://localhost:3031
+      - API_HOST=http://localhost:3101
       - JWT_SECRET=${GROWTHBOOK_JWT_SECRET:-dev-growthbook-jwt-secret-change-in-prod}
       - MONGODB_URI=mongodb://gb-mongo:27017/growthbook
     depends_on:
