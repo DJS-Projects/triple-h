@@ -134,16 +134,29 @@ export function ReviewClient({ detail }: { detail: DocumentDetail }) {
 
 	// Bidirectional hover map: anchors[field_path] = block_id.
 	const anchors = pageBlocks?.field_anchors ?? {};
+	// Mirror `pageForPath`'s fallback: backend may emit either bare path
+	// (envelope provenance form) or `path[0]` (substring matcher form,
+	// for list[str] schema fields like vehicle_number). FE flattens
+	// single-element arrays to bare keys when rendering rows — without
+	// this fallback, list-typed scalar fields lose their blue dot even
+	// though an anchor exists in the map.
+	const anchorForPath = (path: string): string | undefined =>
+		anchors[path] ?? anchors[`${path}[0]`];
 	const blockToField = useMemo(() => {
 		const out: Record<string, string> = {};
-		for (const [path, bid] of Object.entries(anchors)) out[bid] = path;
+		for (const [path, bid] of Object.entries(anchors)) {
+			// Strip trailing [0] so list[str] anchors map back to the bare
+			// path the FE uses for hover highlighting.
+			const canonical = path.endsWith("[0]") ? path.slice(0, -3) : path;
+			if (!(bid in out)) out[bid] = canonical;
+		}
 		return out;
 	}, [anchors]);
 
 	// Block highlighted on the page = either directly hovered or
 	// derived from the currently-hovered KVP row via the anchor map.
 	const highlightedBlockId =
-		hoveredBlock ?? (hoveredField ? anchors[hoveredField] ?? null : null);
+		hoveredBlock ?? (hoveredField ? anchorForPath(hoveredField) ?? null : null);
 	// And vice versa for the KVP side.
 	const highlightedFieldPath =
 		hoveredField ?? (hoveredBlock ? blockToField[hoveredBlock] ?? null : null);
@@ -675,7 +688,12 @@ function KvpTable({
 			{rows.map((row) => {
 				const isDirty = row.path in draft;
 				const value = isDirty ? draft[row.path] : stringify(row.value);
-				const hasAnchor = row.path in anchors;
+				// Mirror ReviewClient's anchorForPath fallback: list[str]
+				// schema fields (vehicle_number, do_number etc) anchor under
+				// `path[0]` from the substring matcher but render under the
+				// bare path. Probe both forms.
+				const hasAnchor =
+					row.path in anchors || `${row.path}[0]` in anchors;
 				const isHighlighted = highlightedField === row.path;
 				const bgClass = isHighlighted
 					? "bg-brand-sky/30"

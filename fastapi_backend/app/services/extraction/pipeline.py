@@ -57,6 +57,10 @@ from app.services.architecture import (
 )
 from app.services.extraction.anchors import extract_anchors
 from app.services.extraction.arq import ARQ_BY_DOC_TYPE
+from app.services.extraction.correctors import (
+    CorrectionRunResult,
+    correct_invalid_fields,
+)
 from app.services.extraction.postprocess import postprocess_extracted
 from app.services.extraction.preprocess import (
     extract_document_date,
@@ -66,6 +70,7 @@ from app.services.extraction.result import (
     DocumentAnalysis,
     ExtractionEnvelope,
     ExtractionMetadata,
+    FieldCorrectionRecord,
     FieldProvenance,
     StageOutput,
 )
@@ -127,8 +132,32 @@ def _build_agent(virtual_model: str, output_type: type[T]) -> Agent[None, T]:
     return Agent(model, output_type=PromptedOutput(output_type))
 
 
+# Known vision-capable LiteLLM model aliases. Keep in sync with
+# `routes/extract.py:EXTRACTION_MODELS` — `supports_multi_image=True`
+# entries belong here. The legacy `vision-*` prefix convention was
+# dropped during the model-naming overhaul; this explicit set is the
+# replacement so the pipeline doesn't text-only a vision model.
+_VISION_MODELS: frozenset[str] = frozenset(
+    {
+        "ollama-gemma4-31b",
+        "gemma-4-31b",
+        "groq-llama4-scout",
+        "groq-llama4-maverick",
+        "nim-llama-90b-vision",
+    }
+)
+
+
 def _is_vision_model(model_name: str) -> bool:
-    return model_name.startswith("vision-")
+    """True for models that accept image inputs alongside text.
+
+    Pipeline branches on this twice: (1) whether to render + attach page
+    PNGs to the main extraction call, (2) whether the post-extraction
+    corrector loop runs (correctors need page images to re-locate a
+    field visually). Text-only models go through the OCR-markdown-only
+    path with corrections disabled.
+    """
+    return model_name in _VISION_MODELS or model_name.startswith("vision-")
 
 
 @dataclass(frozen=True)
@@ -293,6 +322,95 @@ async def _run_arq_llm_stage(
     return extracted_dict, duration_ms
 
 
+def _expand_item_anchors(
+    anchors: list[FieldProvenance],
+    items: list[Any],
+) -> list[FieldProvenance]:
+    """Convert `items.<inner>` anchors → `items[i].<inner>` per-row entries.
+
+    `extract_anchors` emits one entry per anchored cell using the schema-key
+    form (e.g. `field="items.description"`). The FE's flatten convention uses
+    the indexed form (`items[0].description`). Without this expansion, item-row
+    anchors arrive at the FE under a path it never asks about → all line-item
+    cells appear unanchored on ARQ runs.
+
+    Match strategy: for each `items.<inner>` anchor, scan `items` and bind to
+    the first row where `str(row[inner]) == str(anchor.value)`. Track which
+    `(row_idx, inner)` slots have already been claimed so multiple anchors
+    with the same value (e.g. two rows with quantity "2") don't all collapse
+    to row 0.
+
+    Anchors whose value doesn't match any row are dropped — they're noise
+    from Chandra-extracted cells the LLM paraphrased away. Non-items anchors
+    pass through unchanged.
+    """
+    out: list[FieldProvenance] = []
+    claimed: set[tuple[int, str]] = set()
+    for a in anchors:
+        if not a.field.startswith("items."):
+            out.append(a)
+            continue
+        inner = a.field.split(".", 1)[1]
+        target = str(a.value)
+        matched_idx: int | None = None
+        for i, row in enumerate(items):
+            if not isinstance(row, dict):
+                continue
+            if (i, inner) in claimed:
+                continue
+            if str(row.get(inner, "")) == target:
+                matched_idx = i
+                break
+        if matched_idx is None:
+            continue
+        claimed.add((matched_idx, inner))
+        out.append(
+            FieldProvenance(
+                field=f"items[{matched_idx}].{inner}",
+                value=a.value,
+                source=a.source,
+                block_id=a.block_id,
+                bbox=a.bbox,
+                page=a.page,
+                confidence=a.confidence,
+            )
+        )
+    return out
+
+
+def _synthesize_item_vlm_provenance(
+    items: list[Any],
+    expanded_anchors: list[FieldProvenance],
+) -> list[FieldProvenance]:
+    """Emit `vlm`-source rows for populated `items[i].<k>` cells without an anchor.
+
+    Mirrors the top-level synthesis: every populated FE-flattened path needs
+    at least one provenance row so the review UI can attach metadata to it.
+    Empty cells (None / "" / []) are skipped — same "populated" rule as the
+    top-level scalar path.
+    """
+    anchored_paths = {a.field for a in expanded_anchors if a.field.startswith("items[")}
+    out: list[FieldProvenance] = []
+    for i, row in enumerate(items):
+        if not isinstance(row, dict):
+            continue
+        for inner, value in row.items():
+            if value in (None, "", []):
+                continue
+            path = f"items[{i}].{inner}"
+            if path in anchored_paths:
+                continue
+            out.append(
+                FieldProvenance(
+                    field=path,
+                    value=value,
+                    source="vlm",
+                    confidence=None,
+                )
+            )
+    return out
+
+
 def _build_envelope(
     *,
     doc_type: DocType,
@@ -301,6 +419,7 @@ def _build_envelope(
     checkpoint_id: str | None,
     parsed_info: dict[str, Any],
     anchors: list[FieldProvenance],
+    corrections: list[FieldCorrectionRecord] | None = None,
     chandra_duration_ms: int,
     llm_duration_ms: int,
     total_duration_ms: int,
@@ -312,31 +431,42 @@ def _build_envelope(
     LLM output. Top-level `parsed_info` is the post-processed merged
     answer the API surfaces.
 
-    `provenance` lists the anchor entries verbatim plus a synthetic
-    `vlm` entry for every parsed_info field that didn't have an anchor —
-    so every populated field has at least one provenance row.
+    `provenance` lists the anchor entries (with item-row anchors expanded
+    to `items[i].<inner>` notation so the FE's flatten convention matches)
+    plus synthetic `vlm` entries for every populated parsed_info field —
+    top-level scalars and item-row cells alike — that didn't have an
+    anchor. Every populated FE-flattened path has at least one provenance
+    row.
     """
+    items_list: list[Any] = (
+        parsed_info["items"] if isinstance(parsed_info.get("items"), list) else []
+    )
+    expanded_anchors = _expand_item_anchors(anchors, items_list)
+
     anchor_dict: dict[str, Any] = {}
     for a in anchors:
         anchor_dict.setdefault(a.field, a.value)
 
-    anchored_fields = set(anchor_dict.keys())
-    populated_fields = {k for k, v in parsed_info.items() if v not in (None, "", [])}
+    anchored_top_level = {a.field for a in anchors if not a.field.startswith("items.")}
+    populated_top_level = {
+        k for k, v in parsed_info.items() if k != "items" and v not in (None, "", [])
+    }
 
     chandra_stage = StageOutput(
         parsed_info=anchor_dict,
-        fields_filled=sorted(anchored_fields),
-        missing_fields=sorted(populated_fields - anchored_fields),
+        fields_filled=sorted({a.field for a in anchors}),
+        missing_fields=sorted(populated_top_level - anchored_top_level),
         duration_ms=chandra_duration_ms,
     )
     vlm_stage = StageOutput(
         parsed_info=parsed_info,
-        fields_filled=sorted(populated_fields),
+        fields_filled=sorted(populated_top_level),
         missing_fields=[],
         duration_ms=llm_duration_ms,
     )
 
-    # Synthesise vlm provenance for un-anchored populated fields.
+    # Synthesise vlm provenance for un-anchored populated fields:
+    # top-level scalars first, then item-row cells (with FE-flattened path).
     extra_provenance: list[FieldProvenance] = [
         FieldProvenance(
             field=field,
@@ -344,18 +474,22 @@ def _build_envelope(
             source="vlm",
             confidence=None,
         )
-        for field in sorted(populated_fields - anchored_fields)
+        for field in sorted(populated_top_level - anchored_top_level)
     ]
+    extra_provenance.extend(
+        _synthesize_item_vlm_provenance(items_list, expanded_anchors)
+    )
 
     return ExtractionEnvelope(
         status="ok",
         doc_type=doc_type,
         parsed_info=parsed_info,
-        provenance=anchors + extra_provenance,
+        provenance=expanded_anchors + extra_provenance,
         stage_outputs={
             "chandra_processed": chandra_stage,
             "vlm_processed": vlm_stage,
         },
+        corrections=corrections or [],
         document_analysis=DocumentAnalysis(detected_type=doc_type),
         metadata=ExtractionMetadata(
             page_count=page_count,
@@ -577,16 +711,55 @@ async def _run_arq_path(
             sum(1 for k, v in extracted_raw.items() if extracted_post.get(k) != v),
         )
 
+    # Self-correction loop: validate registered fields (vehicle plates,
+    # TINs, dates, postcodes), reprompt the LLM with the page image when
+    # validation fails, fall through to original on retry exhaustion.
+    # Skipped when no page images (non-vision model) — correction needs
+    # the visual to be useful.
+    correction_run: CorrectionRunResult
+    with _tracer.start_as_current_span("validate_and_correct") as corr_span:
+        if llm_images:
+            correction_run = await correct_invalid_fields(
+                parsed_info=extracted_post,
+                doc_type=doc_type,
+                page_images=llm_images,
+                model=model,
+            )
+        else:
+            correction_run = CorrectionRunResult(parsed_info=extracted_post)
+        corr_span.set_attribute(
+            "corrections_attempted", len(correction_run.corrections)
+        )
+        corr_span.set_attribute(
+            "corrections_succeeded",
+            sum(1 for c in correction_run.corrections if c.final_valid),
+        )
+
+    extracted_final = correction_run.parsed_info
+    correction_records = [
+        FieldCorrectionRecord(
+            field_path=c.field_path,
+            original_value=c.original_value,
+            final_value=c.final_value,
+            was_corrected=c.was_corrected,
+            final_valid=c.final_valid,
+            retries_used=c.retries_used,
+            error_hint=c.error_hint,
+        )
+        for c in correction_run.corrections
+    ]
+
     total_duration_ms = int((time.perf_counter() - overall_start) * 1000)
     envelope = _build_envelope(
         doc_type=doc_type,
         model=model,
         page_count=artifacts.page_count,
         checkpoint_id=artifacts.checkpoint_id,
-        parsed_info=extracted_post,
+        parsed_info=extracted_final,
         anchors=anchors,
+        corrections=correction_records,
         chandra_duration_ms=int(chandra_seconds * 1000),
         llm_duration_ms=llm_duration_ms,
         total_duration_ms=total_duration_ms,
     )
-    return extracted_post, envelope
+    return extracted_final, envelope

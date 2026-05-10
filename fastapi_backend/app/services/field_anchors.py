@@ -140,6 +140,11 @@ def compute_field_pages(
     Computes anchors across all pages (no filter), then projects each
     anchor's block_id to its source page. Fields with no anchor are
     omitted from the result — the FE treats those as document-level.
+
+    v1 substring-matching path. Used for legacy single_pass runs and
+    legacy rows that pre-date the ARQ envelope. ARQ runs go through
+    `field_pages_from_envelope` instead — see `routes/documents.py`
+    `_build_run_payload` for the branching.
     """
     anchors = compute_field_anchors(extracted, chandra_chunks)
     out: dict[str, int] = {}
@@ -147,4 +152,63 @@ def compute_field_pages(
         page = page_no_for_block_id(bid)
         if page is not None:
             out[path] = page
+    return out
+
+
+def field_anchors_from_envelope(
+    envelope: dict[str, Any],
+    *,
+    page_no: int | None = None,
+) -> dict[str, str]:
+    """Derive `{field_path: block_id}` from `ExtractionEnvelope.provenance`.
+
+    Authoritative counterpart to `compute_field_anchors`. Used by the
+    per-page blocks route to surface block ids for tier-1/tier-2
+    anchored fields the substring heuristic couldn't pin (formatting
+    drift between LLM-emitted values and Chandra block text).
+
+    `page_no` is 1-indexed (matching `DocumentPage.page_no`); pass None
+    to return anchors across every page in the document.
+
+    Skips entries lacking a block_id (vlm-source synthetic rows) — they
+    can't render a blue-dot / bbox highlight without a target block.
+    """
+    out: dict[str, str] = {}
+    for entry in envelope.get("provenance", []) or []:
+        field = entry.get("field")
+        block_id = entry.get("block_id")
+        entry_page = entry.get("page")
+        if not field or not block_id:
+            continue
+        if page_no is not None and entry_page != page_no:
+            continue
+        out[field] = str(block_id)
+    return out
+
+
+def field_pages_from_envelope(envelope: dict[str, Any]) -> dict[str, int]:
+    """Derive `{field_path: page_no_1indexed}` from `ExtractionEnvelope.provenance`.
+
+    Authoritative — the ARQ pipeline knew which Chandra block each
+    anchored value came from at extraction time and stamped the page
+    onto every `FieldProvenance` row. Far more reliable than the v1
+    `compute_field_pages` substring heuristic, which only finds fields
+    whose LLM-emitted value happens to substring-match a block (and
+    structurally cannot find computed aggregates like total_weight_mt).
+
+    Item-row provenance arrives in FE-flattened form (`items[i].field`)
+    after `_expand_item_anchors` runs in `pipeline.py:_build_envelope`.
+    No notation translation needed here.
+
+    Entries with `page=None` (typically vlm-source synthetic rows for
+    fields the LLM produced without an anchor) are omitted — same FE
+    semantics as the v1 path: absence = document-level.
+    """
+    out: dict[str, int] = {}
+    for entry in envelope.get("provenance", []) or []:
+        field = entry.get("field")
+        page = entry.get("page")
+        if not field or page is None:
+            continue
+        out[field] = int(page)
     return out

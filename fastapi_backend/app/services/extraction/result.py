@@ -193,6 +193,35 @@ class ExtractionMetadata(BaseModel):
 ExtractionStatus = Literal["ok", "partial", "error"]
 
 
+class FieldCorrectionRecord(BaseModel):
+    """One audit-log entry from the post-extraction validation/correction loop.
+
+    Mirrors `correctors.FieldCorrection` but as a pydantic model so it
+    can ride inside the envelope and survive JSON round-trips. The FE
+    can render a "this field was auto-corrected" badge later (deferred
+    to T11).
+    """
+
+    model_config = _STRICT
+
+    field_path: str = Field(description="FE-flattened path (e.g. 'vehicle_number[0]').")
+    original_value: str
+    final_value: str
+    was_corrected: bool = Field(
+        description="True when the LLM produced a different value that passed validation."
+    )
+    final_valid: bool = Field(
+        description="True iff `final_value` passes the field's format validator. "
+        "False on retry-exhausted fall-through (original kept)."
+    )
+    retries_used: int = Field(ge=0)
+    error_hint: str | None = Field(
+        default=None,
+        description="One-line reason a correction failed (LLM declined, "
+        "retries exhausted, budget exhausted, etc).",
+    )
+
+
 class ExtractionEnvelope(BaseModel):
     """The full extraction result returned by the pipeline.
 
@@ -226,6 +255,13 @@ class ExtractionEnvelope(BaseModel):
         default_factory=dict,
         description="Keyed by stage name: 'chandra_processed', 'vlm_processed'. "
         "Same schema shape across stages → directly diffable.",
+    )
+    corrections: list[FieldCorrectionRecord] = Field(
+        default_factory=list,
+        description="Audit log from the validate/correct loop. One entry per "
+        "field that failed format validation, recording whether the LLM-driven "
+        "retry succeeded (was_corrected + final_valid both True) or fell "
+        "through to the original value. Empty when no field needed correction.",
     )
     document_analysis: DocumentAnalysis
     metadata: ExtractionMetadata

@@ -159,7 +159,10 @@ async def list_documents(
 
 
 async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPayload:
-    from app.services.field_anchors import compute_field_pages
+    from app.services.field_anchors import (
+        compute_field_pages,
+        field_pages_from_envelope,
+    )
 
     reviews = await persistence.latest_reviews_by_path(session, run.extraction_run_id)
     edits = {path: r.edited_value for path, r in reviews.items()}
@@ -168,9 +171,25 @@ async def _build_run_payload(session: AsyncSession, run: Any) -> ExtractionRunPa
         apply_overlay(extracted_base, edits) if edits else dict(extracted_base)
     )
     chunks = run.payload.get("chandra_chunks") if run.payload else None
-    # Anchored scalars get a 1-indexed page; unanchored scalars are
-    # treated as document-level on the FE.
-    field_pages = compute_field_pages(extracted_view, chunks) if chunks else {}
+    envelope = run.payload.get("envelope") if run.payload else None
+    # Layer the two page-attribution systems so each covers the other's
+    # blind spots:
+    #   - v1 substring matching (compute_field_pages) finds any LLM-
+    #     emitted scalar that happens to substring-match a Chandra block.
+    #     Catches paraphrased/non-anchor fields (sold_to, vehicle_number,
+    #     do_issuer_name) that the ARQ regex anchors don't pin.
+    #   - v2 envelope provenance (field_pages_from_envelope) is
+    #     authoritative for the regex-anchored fields (do_number,
+    #     po_number, items[i].description). Survives the OCR/LLM
+    #     formatting drift that breaks v1 substring search.
+    # Envelope wins on overlap. Items[i].field notation matches between
+    # both since v1 has always used it and v2 adopted it via
+    # _expand_item_anchors in pipeline.py.
+    field_pages: dict[str, int] = {}
+    if chunks:
+        field_pages.update(compute_field_pages(extracted_view, chunks))
+    if envelope:
+        field_pages.update(field_pages_from_envelope(envelope))
     review_list = [
         FieldReviewSummary(
             field_review_id=r.field_review_id,
@@ -359,7 +378,19 @@ async def get_document_page_blocks(
         )
 
     extracted = run.payload.get("extracted") or {}
-    anchors = compute_field_anchors(extracted, chunks, page_no=page_no)
+    envelope = run.payload.get("envelope") or None
+    # Same layering policy as `_build_run_payload` for `field_pages`:
+    # substring matcher catches paraphrased fields the LLM rephrased
+    # (do_issuer_name, sold_to_address); envelope provides authoritative
+    # block ids for tier-1/tier-2 anchored fields where substring
+    # search broke on formatting drift (do_number, po_number, date).
+    # Envelope wins on overlap. Together → blue-dot coverage for every
+    # field that's locatable on this page.
+    anchors: dict[str, str] = compute_field_anchors(extracted, chunks, page_no=page_no)
+    if envelope:
+        from app.services.field_anchors import field_anchors_from_envelope
+
+        anchors.update(field_anchors_from_envelope(envelope, page_no=page_no))
 
     return PageBlocksResponse(
         page_no=page_no,

@@ -240,3 +240,227 @@ def test_build_envelope_metadata_carries_model_and_timing() -> None:
     assert env.metadata.chandra_checkpoint_id == "ckpt-abc"
     assert env.metadata.processing_time_ms == 5200
     assert env.document_analysis.detected_type == "weighing_bill"
+
+
+# ─── _build_envelope: items[i].<inner> path expansion ────────────────────────
+#
+# Tier-2 anchors come back with schema-key paths (e.g. `items.description`).
+# The FE flattens arrays with explicit indices (`items[0].description`).
+# `_build_envelope` reconciles the two so item-row anchors arrive at the FE
+# under a path it actually queries — without this, every line-item cell
+# appears unanchored on ARQ runs.
+
+
+def test_build_envelope_expands_items_anchors_to_indexed_paths() -> None:
+    """Anchors emitted with `items.description` → envelope provenance contains
+    `items[0].description`, `items[1].description` etc, matched by exact value."""
+    anchors = [
+        FieldProvenance(
+            field="items.description",
+            value="HTD BARS Y10",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+        ),
+        FieldProvenance(
+            field="items.description",
+            value="HTD BARS Y12",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+        ),
+    ]
+    parsed = {
+        "items": [
+            {"description": "HTD BARS Y10", "quantity": "2"},
+            {"description": "HTD BARS Y12", "quantity": "8"},
+        ]
+    }
+    env = _build_envelope(
+        doc_type="delivery_order",
+        model="m",
+        page_count=1,
+        checkpoint_id=None,
+        parsed_info=parsed,
+        anchors=anchors,
+        chandra_duration_ms=100,
+        llm_duration_ms=200,
+        total_duration_ms=300,
+    )
+    paths = {p.field for p in env.provenance}
+    assert "items[0].description" in paths
+    assert "items[1].description" in paths
+    # Schema-key form must NOT appear after expansion — otherwise the FE
+    # renders both notations and counts every item-row anchor twice.
+    assert "items.description" not in paths
+
+
+def test_build_envelope_skips_unmatched_item_anchors() -> None:
+    """An anchor whose value doesn't appear in any `items[*]` row is dropped.
+    This happens when Chandra OCR'd a cell the LLM paraphrased away (e.g.
+    OCR'd "Y10 12mm Bars" but the LLM emitted "HTD BARS Y10" in the schema).
+    The anchor is useless to the FE — better to drop than to surface a
+    phantom path."""
+    anchors = [
+        FieldProvenance(
+            field="items.description",
+            value="HTD BARS Y10",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+        ),
+        FieldProvenance(
+            field="items.description",
+            value="GHOST VALUE NOT IN PARSED INFO",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+        ),
+    ]
+    parsed = {"items": [{"description": "HTD BARS Y10", "quantity": "2"}]}
+    env = _build_envelope(
+        doc_type="delivery_order",
+        model="m",
+        page_count=1,
+        checkpoint_id=None,
+        parsed_info=parsed,
+        anchors=anchors,
+        chandra_duration_ms=100,
+        llm_duration_ms=200,
+        total_duration_ms=300,
+    )
+    # Only check anchor-source rows: the vlm-synthesis pass will add rows
+    # for populated cells without anchors (e.g. quantity), but those are
+    # expected output of a different code path.
+    anchored_item_paths = [
+        p.field
+        for p in env.provenance
+        if p.field.startswith("items") and p.source == "regex_table"
+    ]
+    assert anchored_item_paths == ["items[0].description"]
+
+
+def test_build_envelope_synthesises_vlm_provenance_for_item_row_fields() -> None:
+    """Populated `items[i][k]` cells without a regex anchor get a synthetic
+    vlm-source provenance row. Mirrors the contract for top-level scalars:
+    every populated FE-flattened path has at least one provenance row so
+    the review UI can attach metadata to it."""
+    anchors = [
+        FieldProvenance(
+            field="items.description",
+            value="HTD BARS Y10",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+        )
+    ]
+    parsed = {
+        "items": [
+            {
+                "description": "HTD BARS Y10",
+                "quantity": "2",
+                "weight_mt": "2.0000",
+            },
+            {
+                "description": "HTD BARS Y12",
+                "quantity": "8",
+                "weight_mt": "8.0000",
+            },
+        ]
+    }
+    env = _build_envelope(
+        doc_type="delivery_order",
+        model="m",
+        page_count=1,
+        checkpoint_id=None,
+        parsed_info=parsed,
+        anchors=anchors,
+        chandra_duration_ms=100,
+        llm_duration_ms=200,
+        total_duration_ms=300,
+    )
+    by_path = {p.field: p for p in env.provenance}
+
+    # Anchored row 0 description: regex_table source survives.
+    assert by_path["items[0].description"].source == "regex_table"
+    # Other populated cells in row 0 + all of row 1 → synthetic vlm rows.
+    assert by_path["items[0].quantity"].source == "vlm"
+    assert by_path["items[0].weight_mt"].source == "vlm"
+    assert by_path["items[1].description"].source == "vlm"
+    assert by_path["items[1].quantity"].source == "vlm"
+    assert by_path["items[1].weight_mt"].source == "vlm"
+
+
+def test_build_envelope_empty_value_item_cells_get_no_provenance() -> None:
+    """None / "" / [] cells in items rows must NOT generate vlm rows —
+    same "populated" rule as top-level scalars. Otherwise we'd flood the
+    review UI with metadata rows for fields the LLM didn't fill."""
+    anchors: list[FieldProvenance] = []
+    parsed = {
+        "items": [
+            {
+                "description": "HTD BARS Y10",
+                "quantity": "2",
+                "weight_mt": None,  # empty → no provenance
+                "remarks": "",  # empty → no provenance
+            }
+        ]
+    }
+    env = _build_envelope(
+        doc_type="delivery_order",
+        model="m",
+        page_count=1,
+        checkpoint_id=None,
+        parsed_info=parsed,
+        anchors=anchors,
+        chandra_duration_ms=100,
+        llm_duration_ms=200,
+        total_duration_ms=300,
+    )
+    paths = {p.field for p in env.provenance if p.field.startswith("items")}
+    assert paths == {"items[0].description", "items[0].quantity"}
+
+
+def test_build_envelope_duplicate_value_anchors_bind_to_distinct_rows() -> None:
+    """Two rows can share an inner-field value (e.g. quantity="2" twice).
+    Anchors with identical values must claim distinct row indices so they
+    don't all collapse to row 0."""
+    anchors = [
+        FieldProvenance(
+            field="items.quantity",
+            value="2",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+            block_id="/page/0/Table/A",
+        ),
+        FieldProvenance(
+            field="items.quantity",
+            value="2",
+            source="regex_table",
+            confidence=1.0,
+            page=1,
+            block_id="/page/0/Table/B",
+        ),
+    ]
+    parsed = {
+        "items": [
+            {"description": "row0", "quantity": "2"},
+            {"description": "row1", "quantity": "2"},
+        ]
+    }
+    env = _build_envelope(
+        doc_type="delivery_order",
+        model="m",
+        page_count=1,
+        checkpoint_id=None,
+        parsed_info=parsed,
+        anchors=anchors,
+        chandra_duration_ms=100,
+        llm_duration_ms=200,
+        total_duration_ms=300,
+    )
+    quantity_paths = sorted(
+        p.field for p in env.provenance if p.field.endswith(".quantity")
+    )
+    assert quantity_paths == ["items[0].quantity", "items[1].quantity"]
