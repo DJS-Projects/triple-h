@@ -140,6 +140,16 @@ run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run alembic revi
 description = "Start all services via Docker Compose"
 run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build -d"
 
+[tasks."docker:rebuild"]
+description = "Rebuild + force-recreate a service (defaults to backend) so code changes baked into the image actually run"
+# `mise docker:up`'s --build flag rebuilds when the Dockerfile or COPY
+# inputs change, but compose may still reuse the previous container if
+# the image SHA hasn't changed in a way it notices. After editing
+# fastapi_backend code, run `mise docker:rebuild` to force both a
+# rebuild AND a container recreation. Pass a service name to target
+# something other than backend: `mise docker:rebuild -- frontend`.
+run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up -d --build --force-recreate ${1:-backend}"
+
 [tasks."docker:watch"]
 description = "Start all services with file watch (foreground)"
 run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build --watch"

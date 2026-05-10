@@ -12,6 +12,7 @@ Why: tasks bundle the dotenvx wrapper (so encrypted env vars decrypt correctly),
 |--------|----------|
 | First-time setup | `mise setup` |
 | Start full stack | `mise docker:up` |
+| Pick up backend code change | `mise docker:rebuild` |
 | Hot-reload watch | `mise docker:watch` |
 | Stop stack | `mise docker:down` |
 | Wipe volumes | `mise docker:reset` |
@@ -33,6 +34,8 @@ Only fall back to raw `docker compose ...` / `uv run ...` when:
 - Inspecting state (`docker compose ps`, `docker compose logs`)
 
 If you find yourself running the same raw command repeatedly, propose adding it as a `mise` task.
+
+**Never run raw `docker compose build` / `docker compose up --build` to pick up backend code changes** — it bypasses the dotenvx wrapper, so encrypted env vars (LiteLLM keys, GrowthBook SDK key, observability keys) get passed through as their `encrypted:...` literal blobs and the backend boots without any of them. Use `mise docker:rebuild` instead — it wraps with dotenvx + adds `--force-recreate` so the new image actually runs (compose otherwise reuses the existing container when the image SHA hasn't shifted in a way it notices).
 
 ## Other rules
 
