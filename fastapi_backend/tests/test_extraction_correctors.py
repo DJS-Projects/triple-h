@@ -8,6 +8,7 @@ shape without spending tokens or 30s per test.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock
@@ -288,6 +289,96 @@ async def test_does_not_mutate_input_dict(patch_agent: Any) -> None:
 
 
 # ─── LLM failure path (exception during agent.run) ───────────────────────────
+
+
+# ─── Concurrency: multiple in-budget corrections fan out via gather ──────────
+
+
+@pytest.mark.asyncio
+async def test_in_budget_corrections_run_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two invalid fields at budget=2 must execute concurrently — wall time
+    is roughly max(per-call), not sum. Asserted via an `asyncio.Event`: each
+    fake `agent.run` increments an in-flight counter and waits until the
+    counter has reached 2 before returning. If the loop were sequential the
+    second call could never start, so the test would deadlock under the
+    timeout."""
+    in_flight = 0
+    both_started = asyncio.Event()
+    # Maps the invalid value seen in the prompt to the corrected response.
+    # Lets us produce deterministic answers regardless of which task
+    # the event loop schedules first.
+    responses: dict[str, str] = {
+        "YHU/805": "JHU8805",
+        "garbage-tin": "IG12345678901",
+    }
+
+    async def _run(message: Any) -> _FakeRun:
+        nonlocal in_flight
+        # First positional message piece is the prompt string.
+        prompt = message[0] if isinstance(message, list) else str(message)
+        match = next((k for k in responses if k in prompt), None)
+        in_flight += 1
+        if in_flight >= 2:
+            both_started.set()
+        await asyncio.wait_for(both_started.wait(), timeout=1.0)
+        return _FakeRun(responses.get(match) if match else None)
+
+    fake = AsyncMock()
+    fake.run = _run
+    monkeypatch.setattr(correctors, "_build_correction_agent", lambda _m: fake)
+
+    result = await correct_invalid_fields(
+        parsed_info={
+            # Different doc_type fields would not co-occur in real data,
+            # but the registry walks any matching pair so we use one
+            # doc_type with two registered invalid fields.
+            "vehicle_number": ["YHU/805"],
+            "date": "2026-12-32",  # invalid date
+        },
+        doc_type="delivery_order",
+        page_images=["fake-image"],
+        model="m",
+        max_corrections_per_run=2,
+    )
+    # If gather did NOT run concurrently, the second call could never be
+    # in-flight when the first awaits the event → asyncio.wait_for raises
+    # TimeoutError → test fails before reaching this assert.
+    assert in_flight == 2
+    # vehicle_number corrected; date is harder to validate via the fake
+    # path so skip its specific value — only assert the audit log size.
+    assert result.parsed_info["vehicle_number"] == ["JHU8805"]
+    assert len(result.corrections) == 2
+
+
+@pytest.mark.asyncio
+async def test_default_budget_is_two(patch_agent: Any) -> None:
+    """Default `max_corrections_per_run=2`. Three invalid fields →
+    first two attempted, third gets budget-skipped audit row."""
+    patch_agent("WXY1234", "BCD5678")  # corrects 2 plates
+    result = await correct_invalid_fields(
+        parsed_info={
+            "vehicle_number": ["YHU/805", "ZZZ/999", "QQQ/111"],
+        },
+        doc_type="delivery_order",
+        page_images=["fake-image"],
+        model="m",
+        # max_corrections_per_run omitted → defaults to 2.
+    )
+    assert len(result.corrections) == 3
+    in_budget = [
+        c
+        for c in result.corrections
+        if c.error_hint != ("skipped: per-run correction budget exhausted")
+    ]
+    skipped = [
+        c
+        for c in result.corrections
+        if c.error_hint == ("skipped: per-run correction budget exhausted")
+    ]
+    assert len(in_budget) == 2
+    assert len(skipped) == 1
 
 
 @pytest.mark.asyncio

@@ -28,12 +28,16 @@ Deliberately NOT applied to:
     which belongs in the company canonicalization pipeline (T10).
 
 Cost note: each correction call is a full LLM round-trip (~30s on
-ollama-gemma4-31b). The `max_corrections_per_run` budget caps the
-worst case so a doc with many invalid fields can't blow up latency.
+ollama-gemma4-31b). In-budget corrections run **concurrently** via
+`asyncio.gather`, so wall time is roughly the slowest single call
+rather than the sum. The `max_corrections_per_run` budget (default 2)
+caps both the concurrency fan-out and the worst-case latency on a
+doc with many invalid fields.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -224,6 +228,24 @@ class CorrectionRunResult:
     corrections: list[FieldCorrection] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class _PendingCorrection:
+    """Bookkeeping for a single invalid value awaiting correction.
+
+    Captured during the deterministic collect-pass so the parallel
+    execution-pass can dispatch tasks via `asyncio.gather` while
+    preserving registry order in the audit log + budget split.
+    """
+
+    field_key: str
+    idx: int  # always meaningful; for scalar fields use 0
+    is_list: bool
+    invalid_value: str
+    validator: FieldValidator
+    format_hint: str
+    field_path: str  # FE-flattened (`vehicle_number[0]` or `bill_to_tin`)
+
+
 async def correct_invalid_fields(
     *,
     parsed_info: dict[str, Any],
@@ -231,7 +253,7 @@ async def correct_invalid_fields(
     page_images: list[BinaryContent],
     model: str,
     max_retries_per_field: int = 1,
-    max_corrections_per_run: int = 5,
+    max_corrections_per_run: int = 2,
 ) -> CorrectionRunResult:
     """Validate every registered field; correct invalid values via LLM retry.
 
@@ -241,84 +263,123 @@ async def correct_invalid_fields(
     strict validation but tolerant on exhaust, never error out the run.
 
     `max_corrections_per_run` is a latency cap. Each LLM call is ~30s;
-    a doc with 5+ invalid fields would otherwise blow up. After the cap
-    is hit, remaining invalid fields are flagged in the audit log with
-    `was_corrected=False, final_valid=False` and a `error_hint` of
-    "skipped: per-run correction budget exhausted".
+    a doc with many invalid fields would otherwise blow up. After the
+    cap is hit, remaining invalid fields are flagged in the audit log
+    with `was_corrected=False, final_valid=False` and an `error_hint`
+    of "skipped: per-run correction budget exhausted".
+
+    Execution: in-budget corrections run **concurrently** via
+    `asyncio.gather`. With `max_corrections_per_run=2` (the default),
+    wall time is roughly the slowest single correction rather than the
+    sum. Audit log + value updates are merged back in deterministic
+    registry order so persistence and tests stay reproducible.
     """
     out = dict(parsed_info)
-    corrections: list[FieldCorrection] = []
-    correction_calls = 0
 
+    # ── Phase 1 — collect pass ───────────────────────────────────────────
+    # Walk the registry in insertion order; build a flat list of every
+    # invalid value that needs correction. Determinism here is the
+    # contract the budget split + audit log rely on.
+    pending: list[_PendingCorrection] = []
     for (registered_doc_type, field_key), (
         validator,
         format_hint,
     ) in _VALIDATORS.items():
-        if registered_doc_type != doc_type:
+        if registered_doc_type != doc_type or field_key not in out:
             continue
-        if field_key not in out:
-            continue
-
         value = out[field_key]
         if value is None or value == "" or value == []:
             continue
-
-        # Walk both scalar and list[str] fields uniformly.
-        items = value if isinstance(value, list) else [value]
-        new_items: list[Any] = []
-        any_changed = False
+        is_list = isinstance(value, list)
+        items = value if is_list else [value]
         for idx, item in enumerate(items):
-            if not isinstance(item, str):
-                new_items.append(item)
+            if not isinstance(item, str) or validator(item):
                 continue
-            if validator(item):
-                new_items.append(item)
-                continue
-
-            # Invalid — try to correct.
-            field_path = f"{field_key}[{idx}]" if isinstance(value, list) else field_key
-            if correction_calls >= max_corrections_per_run:
-                corrections.append(
-                    FieldCorrection(
-                        field_path=field_path,
-                        original_value=item,
-                        final_value=item,
-                        was_corrected=False,
-                        final_valid=False,
-                        retries_used=0,
-                        error_hint="skipped: per-run correction budget exhausted",
-                    )
+            field_path = f"{field_key}[{idx}]" if is_list else field_key
+            pending.append(
+                _PendingCorrection(
+                    field_key=field_key,
+                    idx=idx,
+                    is_list=is_list,
+                    invalid_value=item,
+                    validator=validator,
+                    format_hint=format_hint,
+                    field_path=field_path,
                 )
-                new_items.append(item)
-                continue
+            )
 
-            corrected, retries, final_valid, hint = await _try_correct_field(
-                field_path=field_path,
-                invalid_value=item,
-                validator=validator,
-                format_hint=format_hint,
+    # ── Phase 2 — budget split ───────────────────────────────────────────
+    # First N pending tasks get an LLM call; the rest record a
+    # budget-exhausted audit row. Order is registry order, so the
+    # split is deterministic across runs.
+    in_budget = pending[:max_corrections_per_run]
+    over_budget = pending[max_corrections_per_run:]
+
+    # ── Phase 3 — concurrent dispatch ────────────────────────────────────
+    # `_try_correct_field` is internally sequential (retry loop within a
+    # single field) but independent across fields, so gather is safe.
+    # Each task builds its own agent via `_build_correction_agent`.
+    task_results = await asyncio.gather(
+        *(
+            _try_correct_field(
+                field_path=p.field_path,
+                invalid_value=p.invalid_value,
+                validator=p.validator,
+                format_hint=p.format_hint,
                 page_images=page_images,
                 model=model,
                 max_retries=max_retries_per_field,
             )
-            correction_calls += retries + 1  # 1st try + retries
-            corrections.append(
-                FieldCorrection(
-                    field_path=field_path,
-                    original_value=item,
-                    final_value=corrected,
-                    was_corrected=corrected != item,
-                    final_valid=final_valid,
-                    retries_used=retries,
-                    error_hint=hint,
-                )
-            )
-            new_items.append(corrected)
-            if corrected != item:
-                any_changed = True
+            for p in in_budget
+        )
+    )
 
-        if any_changed:
-            out[field_key] = new_items if isinstance(value, list) else new_items[0]
+    # ── Phase 4 — merge ──────────────────────────────────────────────────
+    corrections: list[FieldCorrection] = []
+    # Keyed by field_key → list of (idx, corrected_value) so list-typed
+    # fields can be reassembled atomically below.
+    per_key_updates: dict[str, list[tuple[int, str]]] = {}
+
+    for p, (corrected, retries, final_valid, hint) in zip(
+        in_budget, task_results, strict=True
+    ):
+        corrections.append(
+            FieldCorrection(
+                field_path=p.field_path,
+                original_value=p.invalid_value,
+                final_value=corrected,
+                was_corrected=corrected != p.invalid_value,
+                final_valid=final_valid,
+                retries_used=retries,
+                error_hint=hint,
+            )
+        )
+        if corrected != p.invalid_value:
+            per_key_updates.setdefault(p.field_key, []).append((p.idx, corrected))
+
+    for p in over_budget:
+        corrections.append(
+            FieldCorrection(
+                field_path=p.field_path,
+                original_value=p.invalid_value,
+                final_value=p.invalid_value,
+                was_corrected=False,
+                final_valid=False,
+                retries_used=0,
+                error_hint="skipped: per-run correction budget exhausted",
+            )
+        )
+
+    for field_key, updates in per_key_updates.items():
+        original_value = out[field_key]
+        if isinstance(original_value, list):
+            new_list = list(original_value)
+            for idx, corrected in updates:
+                new_list[idx] = corrected
+            out[field_key] = new_list
+        else:
+            # Scalar field: exactly one update by construction (idx=0).
+            out[field_key] = updates[0][1]
 
     return CorrectionRunResult(parsed_info=out, corrections=corrections)
 
