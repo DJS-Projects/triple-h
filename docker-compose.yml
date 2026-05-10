@@ -187,8 +187,15 @@ services:
       - "3031:3000"  # web UI: http://localhost:3031
       - "3101:3100"  # SDK API: http://localhost:3101 (browser/host)
     environment:
-      - APP_ORIGIN=http://localhost:3031
-      - API_HOST=http://localhost:3101
+      # APP_ORIGIN + API_HOST are baked into the web UI bundle and used
+      # for CORS — they MUST match the URL the browser actually uses.
+      # Defaults work for local-host browsers; set GROWTHBOOK_APP_ORIGIN
+      # + GROWTHBOOK_API_HOST_PUBLIC in your shell or .env to reach the
+      # UI from a Tailscale peer / LAN host (e.g. http://laughdiemeh:3031
+      # + http://laughdiemeh:3101 with Tailscale MagicDNS, or the raw
+      # 100.x.y.z IP).
+      - APP_ORIGIN=${GROWTHBOOK_APP_ORIGIN:-http://localhost:3031}
+      - API_HOST=${GROWTHBOOK_API_HOST_PUBLIC:-http://localhost:3101}
       - JWT_SECRET=${GROWTHBOOK_JWT_SECRET:-dev-growthbook-jwt-secret-change-in-prod}
       - MONGODB_URI=mongodb://gb-mongo:27017/growthbook
     depends_on:
