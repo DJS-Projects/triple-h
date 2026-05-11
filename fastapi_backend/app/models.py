@@ -76,6 +76,13 @@ DOC_STATUS_VALUES = (
 doc_type_enum = Enum(*DOC_TYPE_VALUES, name="doc_type", create_type=True)
 doc_status_enum = Enum(*DOC_STATUS_VALUES, name="doc_status", create_type=True)
 
+EXTRACTION_JOB_STATUS_VALUES = ("pending", "running", "succeeded", "failed")
+extraction_job_status_enum = Enum(
+    *EXTRACTION_JOB_STATUS_VALUES,
+    name="extraction_job_status",
+    create_type=True,  # prod uses alembic (checkfirst=True); tests use create_all
+)
+
 
 class Document(Base):
     """Uploaded artifact. PDF/image bytes live in the blob store, not here."""
@@ -378,5 +385,139 @@ class RefinementRun(Base):
             "extraction_run_id",
             unique=True,
             postgresql_where="is_current",
+        ),
+    )
+
+
+class ExtractionJob(Base):
+    """Queued extraction job. One row per upload intent.
+
+    Lifecycle:
+        pending  → claimed by worker → running → succeeded | failed
+        failed  → (terminal; new submission creates a new job)
+
+    Idempotency:
+        - `idempotency_key` (client-supplied or server-generated) is the
+          primary dedup mechanism. Partial unique index on (key)
+          WHERE status IN active states.
+        - `content_hash` + `model` + COALESCE(doc_type) is a second
+          defensive layer for re-uploads that forgot the header.
+
+    Worker claim:
+        Atomic `UPDATE ... WHERE status='pending' RETURNING` with FOR
+        UPDATE SKIP LOCKED. Claim sets `locked_until` to NOW() + lease;
+        sweeper requeues stalled rows.
+    """
+
+    __tablename__ = "extraction_job"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("document.document_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    # NULL = "auto-classify" — per-page pipeline classifies per page.
+    doc_type: Mapped[str | None] = mapped_column(doc_type_enum, nullable=True)
+    status: Mapped[str] = mapped_column(
+        extraction_job_status_enum,
+        nullable=False,
+        server_default="pending",
+    )
+    stage: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    run_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("extraction_run.extraction_run_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="1",
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    request_meta: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default="{}",
+    )
+
+    __table_args__ = (
+        CheckConstraint("attempts >= 0", name="extraction_job_attempts_nonneg"),
+        CheckConstraint("max_attempts >= 1", name="extraction_job_max_attempts_min1"),
+        # Indexes (declared in migration; mirrored here for ORM completeness).
+        Index(
+            "uq_extraction_job_idem_active",
+            "idempotency_key",
+            unique=True,
+            postgresql_where="status IN ('pending', 'running', 'succeeded')",
+        ),
+        # Defensive dedup against re-uploads without an Idempotency-Key.
+        # Two partial indexes (one for NOT NULL, one for NULL) because
+        # postgres requires functions in index expressions to be marked
+        # IMMUTABLE, and the implicit enum→text cast inside COALESCE is
+        # STABLE. Splitting by NULL avoids the cast altogether.
+        Index(
+            "uq_extraction_job_content_active_typed",
+            "content_hash",
+            "model",
+            "doc_type",
+            unique=True,
+            postgresql_where=(
+                "status IN ('pending', 'running', 'succeeded') AND doc_type IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_extraction_job_content_active_auto",
+            "content_hash",
+            "model",
+            unique=True,
+            postgresql_where=(
+                "status IN ('pending', 'running', 'succeeded') AND doc_type IS NULL"
+            ),
+        ),
+        Index(
+            "ix_extraction_job_pending_queue",
+            "created_at",
+            postgresql_where="status = 'pending'",
+        ),
+        Index(
+            "ix_extraction_job_stalled_leases",
+            "locked_until",
+            postgresql_where="status = 'running' AND locked_until IS NOT NULL",
+        ),
+        Index(
+            "ix_extraction_job_doc_created",
+            "document_id",
+            "created_at",
         ),
     )
