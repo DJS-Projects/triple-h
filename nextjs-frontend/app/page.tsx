@@ -54,12 +54,16 @@ export default async function Home() {
 									<div className="min-w-0 flex-1">
 										<p className="truncate font-medium">{d.filename}</p>
 										<div className="flex items-center gap-2">
-											<span className="font-mono text-xs text-muted-foreground">
-												{d.doc_type ?? "—"}
-											</span>
-											<span className="font-mono text-xs text-muted-foreground">
-												·
-											</span>
+											{d.doc_type ? (
+												<>
+													<span className="font-mono text-xs text-muted-foreground">
+														{d.doc_type}
+													</span>
+													<span className="font-mono text-xs text-muted-foreground">
+														·
+													</span>
+												</>
+											) : null}
 											<RecentUploadStatus status={d.status} />
 										</div>
 									</div>
