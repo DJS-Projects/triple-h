@@ -1,13 +1,21 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchExtractionModels, uploadAndExtract } from "@/lib/api";
+import { fetchExtractionModels, submitExtractionJob } from "@/lib/api";
 import { DOC_TYPE_LABELS, DOC_TYPES, uploadSchema } from "@/lib/definitions";
 
-type Status = "idle" | "selected" | "uploading" | "error";
+// Two-stage flow:
+//   1) drop → files land in `staged[]` only; nothing hits the backend yet
+//   2) review batch defaults (doc_type, model) + per-file list
+//   3) click "Submit N to queue" → server actions fire, jobs land in the
+//      panel below via `onJobSubmitted`
+//
+// The intermediate staging card is the load-bearing UX guarantee that no
+// accidental drag-drop fires the queue. Users can also drop more PDFs
+// before clicking submit (they append to staged[]).
+type Status = "idle" | "selected" | "submitting" | "error";
 
 interface ExtractionModel {
 	id: string;
@@ -18,45 +26,138 @@ interface ExtractionModel {
 	note: string | null;
 }
 
-export function UploadDropzone() {
-	const router = useRouter();
+export interface SubmittedJob {
+	job_id: string;
+	document_id: string;
+	filename: string;
+	model: string;
+	submitted_at: number;
+	dedup_status: string;
+	deduped: boolean;
+}
+
+interface UploadDropzoneProps {
+	onJobSubmitted: (job: SubmittedJob) => void;
+}
+
+// Generate a v4-shaped UUID without crypto.randomUUID (Zen / older Firefox
+// don't expose it). Backend treats this as an opaque string; format is for
+// log readability only.
+function generateIdemKey(): string {
+	const bytes = new Uint8Array(16);
+	if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+		crypto.getRandomValues(bytes);
+	} else {
+		for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+	}
+	bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+	const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function formatBytes(n: number): string {
+	if (n < 1024) return `${n} B`;
+	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+	return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+// Per-staged-file row. Owns its own object URL + expand state so toggling
+// the preview on one row doesn't re-render every sibling. The object URL
+// is created lazily on first expand to avoid memory cost for files the
+// user dismisses without previewing, and is always revoked on unmount.
+interface StagedFileRowProps {
+	file: File;
+	index: number;
+	disabled: boolean;
+	onRemove: (index: number) => void;
+}
+
+function StagedFileRow({ file, index, disabled, onRemove }: StagedFileRowProps) {
+	const [expanded, setExpanded] = useState(false);
+
+	// Build the object URL only when the row is first expanded; revoke on
+	// unmount or when the file changes (e.g. removed from staged list).
+	const objectURL = useMemo(() => {
+		if (!expanded) return null;
+		return URL.createObjectURL(file);
+	}, [expanded, file]);
+
+	useEffect(() => {
+		return () => {
+			if (objectURL) URL.revokeObjectURL(objectURL);
+		};
+	}, [objectURL]);
+
+	return (
+		<li className="flex flex-col">
+			<div className="flex items-center gap-3 px-3 py-2">
+				<button
+					type="button"
+					onClick={() => setExpanded((e) => !e)}
+					aria-expanded={expanded}
+					aria-label={expanded ? "hide preview" : "show preview"}
+					className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+				>
+					{expanded ? (
+						<ChevronDown className="h-3.5 w-3.5" />
+					) : (
+						<ChevronRight className="h-3.5 w-3.5" />
+					)}
+				</button>
+				<button
+					type="button"
+					onClick={() => setExpanded((e) => !e)}
+					className="min-w-0 flex-1 truncate text-left text-sm hover:underline"
+				>
+					{file.name}
+				</button>
+				<span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+					{formatBytes(file.size)}
+				</span>
+				<button
+					type="button"
+					onClick={() => onRemove(index)}
+					disabled={disabled}
+					aria-label={`remove ${file.name}`}
+					className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive disabled:opacity-50"
+				>
+					<Trash2 className="h-3.5 w-3.5" />
+				</button>
+			</div>
+			{expanded && objectURL ? (
+				<div className="border-t bg-muted/30 px-3 py-3">
+					{/* <embed> falls back to the browser's built-in PDF viewer
+					    (pdf.js in Firefox/Zen, native in Chrome/Safari). Fixed
+					    height keeps the staging card compact; users scroll
+					    inside the embed if they need more. */}
+					<embed
+						src={objectURL}
+						type="application/pdf"
+						className="block w-full rounded border bg-background"
+						style={{ height: 480 }}
+					/>
+				</div>
+			) : null}
+		</li>
+	);
+}
+
+export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const inputRef = useRef<HTMLInputElement>(null);
-	const [file, setFile] = useState<File | null>(null);
+	const [staged, setStaged] = useState<File[]>([]);
 	const [docType, setDocType] = useState<string>("");
 	const [model, setModel] = useState<string>("");
 	const [models, setModels] = useState<ExtractionModel[]>([]);
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
 	const [dragOver, setDragOver] = useState(false);
-	const [elapsed, setElapsed] = useState(0);
-
-	// Tick the elapsed counter while uploading. The pipeline is a single
-	// blocking POST (no streaming), so we can't show real progress — only
-	// time spent + a stage hint that switches based on typical timings.
-	useEffect(() => {
-		if (status !== "uploading") {
-			setElapsed(0);
-			return;
-		}
-		const t0 = Date.now();
-		const id = setInterval(() => {
-			setElapsed(Math.floor((Date.now() - t0) / 100) / 10);
-		}, 100);
-		return () => clearInterval(id);
-	}, [status]);
-
-	// Stage label based on elapsed seconds — rough timeline matching the
-	// observed pipeline (Chandra ~5-25s, LLM ~10-20s).
-	let stage = "Uploading…";
-	if (elapsed > 1.5) stage = "Running Chandra OCR…";
-	if (elapsed > 8) stage = "Running VLM extraction…";
-	if (elapsed > 35) stage = "Almost there…";
 
 	useEffect(() => {
 		let cancelled = false;
 		fetchExtractionModels().then((res) => {
 			if (cancelled) return;
-			if ("error" in res) return; // silent — keep BE default
+			if ("error" in res) return;
 			const list = res as ExtractionModel[];
 			setModels(list);
 			const defaultModel = list.find((m) => m.is_default);
@@ -67,53 +168,99 @@ export function UploadDropzone() {
 		};
 	}, []);
 
-	const pickFile = useCallback((next: File | null) => {
-		if (!next) {
-			setFile(null);
-			setStatus("idle");
-			return;
+	const stageFiles = useCallback((incoming: File[]) => {
+		if (incoming.length === 0) return;
+		const accepted: File[] = [];
+		const rejected: string[] = [];
+		for (const f of incoming) {
+			const parsed = uploadSchema.safeParse({ file: f, doc_type: "" });
+			if (parsed.success) accepted.push(f);
+			else rejected.push(f.name);
 		}
-		const parsed = uploadSchema.safeParse({ file: next, doc_type: "" });
-		if (!parsed.success) {
-			const issue = parsed.error.issues[0];
-			const msg: string = issue ? issue.message : "invalid file";
-			setError(msg);
+		if (accepted.length === 0) {
+			setError(
+				rejected.length > 0
+					? `rejected: ${rejected.join(", ")}`
+					: "no valid PDFs in selection",
+			);
 			setStatus("error");
 			return;
 		}
-		setError(null);
-		setFile(next);
+		setError(
+			rejected.length > 0 ? `skipped: ${rejected.join(", ")}` : null,
+		);
+		setStaged((prev) => [...prev, ...accepted]);
 		setStatus("selected");
 	}, []);
 
-	const submit = useCallback(async () => {
-		if (!file) return;
-		setStatus("uploading");
+	const removeFile = useCallback((idx: number) => {
+		setStaged((prev) => prev.filter((_, i) => i !== idx));
+	}, []);
+
+	const clearAll = useCallback(() => {
+		setStaged([]);
+		setError(null);
+		setStatus("idle");
+	}, []);
+
+	const submitAll = useCallback(async () => {
+		if (staged.length === 0) return;
+		setStatus("submitting");
 		setError(null);
 
-		const fd = new FormData();
-		fd.append("file", file);
-		fd.append("doc_type", docType);
-		if (model) fd.append("model", model);
-
-		const result = await uploadAndExtract(fd);
-		if ("error" in result) {
-			setError(result.error);
-			setStatus("error");
-			return;
+		// Submit sequentially — POSTs are cheap (~200ms each) but staying
+		// sequential preserves a stable ordering in the queue panel and
+		// keeps any per-submission error attributable to a single file.
+		const remaining: File[] = [];
+		const errors: string[] = [];
+		for (const file of staged) {
+			const fd = new FormData();
+			fd.append("file", file);
+			fd.append("doc_type", docType);
+			if (model) fd.append("model", model);
+			const idemKey = generateIdemKey();
+			const result = await submitExtractionJob(fd, idemKey);
+			if ("error" in result) {
+				remaining.push(file);
+				errors.push(`${file.name}: ${result.error}`);
+				continue;
+			}
+			onJobSubmitted({
+				job_id: result.job.job_id,
+				document_id: result.job.document_id,
+				filename: file.name,
+				model: model || "default",
+				submitted_at: Date.now(),
+				dedup_status: result.job.status,
+				deduped: result.job.deduped,
+			});
 		}
-		router.push(`/documents/${result.documentId}`);
-	}, [file, docType, model, router]);
+		setStaged(remaining);
+		if (errors.length > 0) {
+			setError(errors.join("\n"));
+			setStatus("error");
+		} else {
+			setStatus("idle");
+		}
+	}, [staged, docType, model, onJobSubmitted]);
 
 	const onDrop = useCallback(
 		(e: React.DragEvent<HTMLDivElement>) => {
 			e.preventDefault();
 			setDragOver(false);
-			const next = e.dataTransfer.files?.[0] ?? null;
-			pickFile(next);
+			const dropped = Array.from(e.dataTransfer.files ?? []);
+			stageFiles(dropped);
 		},
-		[pickFile],
+		[stageFiles],
 	);
+
+	const busy = status === "submitting";
+	const totalBytes = staged.reduce((sum, f) => sum + f.size, 0);
+	const selectedModelLabel =
+		models.find((m) => m.id === model)?.label ?? model ?? "default";
+	const docTypeDisplay = docType
+		? DOC_TYPE_LABELS[docType as (typeof DOC_TYPES)[number]]
+		: "Auto-classify";
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -143,24 +290,18 @@ export function UploadDropzone() {
 					ref={inputRef}
 					type="file"
 					accept="application/pdf,.pdf"
+					multiple
 					className="hidden"
-					onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+					onChange={(e) =>
+						stageFiles(Array.from(e.target.files ?? []))
+					}
 				/>
-				{file ? (
-					<>
-						<p className="font-medium">{file.name}</p>
-						<p className="font-mono text-xs text-muted-foreground">
-							{(file.size / 1024).toFixed(1)} KB · click to replace
-						</p>
-					</>
-				) : (
-					<>
-						<p className="font-medium">Drop PDF here or click to choose</p>
-						<p className="font-mono text-xs text-muted-foreground">
-							PDF only · auto-classifies document type
-						</p>
-					</>
-				)}
+				<p className="font-medium">
+					Drop PDFs here or click to choose (multiple allowed)
+				</p>
+				<p className="font-mono text-xs text-muted-foreground">
+					Staged for review before queueing · no jobs fire until you click Submit
+				</p>
 			</div>
 
 			<div className="flex flex-wrap items-center gap-3">
@@ -169,7 +310,7 @@ export function UploadDropzone() {
 					<select
 						value={docType}
 						onChange={(e) => setDocType(e.target.value)}
-						disabled={status === "uploading"}
+						disabled={busy}
 						className="rounded-md border bg-background px-2 py-1 text-sm"
 					>
 						<option value="">Auto-classify</option>
@@ -186,7 +327,7 @@ export function UploadDropzone() {
 					<select
 						value={model}
 						onChange={(e) => setModel(e.target.value)}
-						disabled={status === "uploading" || models.length === 0}
+						disabled={busy || models.length === 0}
 						className="rounded-md border bg-background px-2 py-1 text-sm"
 					>
 						{models.length === 0 ? (
@@ -201,21 +342,6 @@ export function UploadDropzone() {
 						)}
 					</select>
 				</label>
-
-				<Button
-					onClick={submit}
-					disabled={!file || status === "uploading"}
-					className="ml-auto"
-				>
-					{status === "uploading" ? (
-						<>
-							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-							Extracting
-						</>
-					) : (
-						"Extract"
-					)}
-				</Button>
 			</div>
 
 			{model ? (
@@ -229,33 +355,63 @@ export function UploadDropzone() {
 				})()
 			) : null}
 
-			{status === "uploading" ? (
-				<div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
-					<div className="flex items-center gap-3">
-						<Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-deep" />
-						<div className="flex flex-1 items-baseline justify-between gap-2 font-mono text-xs">
-							<span className="text-foreground">{stage}</span>
-							<span className="tabular-nums text-muted-foreground">
-								{elapsed.toFixed(1)}s
-							</span>
-						</div>
+			{staged.length > 0 ? (
+				<>
+					<div className="flex flex-col gap-1">
+						<h3 className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brand-blue">
+							Staged for queue
+						</h3>
+						<p className="font-mono text-[11px] text-muted-foreground">
+							{staged.length} file{staged.length === 1 ? "" : "s"} ·{" "}
+							{formatBytes(totalBytes)} · batch defaults:{" "}
+							<span className="text-foreground">{docTypeDisplay}</span> ·{" "}
+							<span className="text-foreground">{selectedModelLabel}</span>
+						</p>
 					</div>
-					{/* Indeterminate progress bar (no streaming; this is just a
-					    living-system signal so the user knows it's working). */}
-					<div
-						className="relative h-1 overflow-hidden rounded-full bg-muted"
-						aria-hidden
-					>
-						<div className="absolute inset-y-0 -left-1/3 w-1/3 animate-[indeterminate_1.6s_ease-in-out_infinite] rounded-full bg-brand-deep" />
+
+					<ul className="flex w-full flex-col divide-y border-y">
+						{staged.map((f, i) => (
+							<StagedFileRow
+								key={`${f.name}-${f.size}-${f.lastModified}-${i}`}
+								file={f}
+								index={i}
+								disabled={busy}
+								onRemove={removeFile}
+							/>
+						))}
+					</ul>
+
+					<div className="flex items-center justify-between gap-3">
+						<Button
+							variant="outline"
+							onClick={clearAll}
+							disabled={busy}
+							className="text-sm"
+						>
+							Clear all
+						</Button>
+						<Button
+							onClick={submitAll}
+							disabled={busy || staged.length === 0}
+							className="text-sm"
+						>
+							{busy ? (
+								<>
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									Submitting {staged.length}
+								</>
+							) : staged.length === 1 ? (
+								"Submit to queue"
+							) : (
+								`Submit ${staged.length} to queue`
+							)}
+						</Button>
 					</div>
-					<p className="font-mono text-[11px] text-muted-foreground">
-						Single-doc pipeline. Typical: 30-50s for multi-page docs.
-					</p>
-				</div>
+				</>
 			) : null}
 
 			{error ? (
-				<p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+				<p className="whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 					{error}
 				</p>
 			) : null}

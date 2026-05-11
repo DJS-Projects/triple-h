@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { UploadDropzone } from "@/components/upload-dropzone";
+import { ExtractionQueue } from "@/components/extraction-queue";
+import { RecentUploadStatus } from "@/components/recent-upload-status";
 import { fetchDocumentList } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function Home() {
 				</p>
 			</header>
 
-			<UploadDropzone />
+			<ExtractionQueue />
 
 			<section className="flex flex-col gap-3">
 				<div className="flex items-end justify-between">
@@ -52,9 +53,15 @@ export default async function Home() {
 								>
 									<div className="min-w-0 flex-1">
 										<p className="truncate font-medium">{d.filename}</p>
-										<p className="font-mono text-xs text-muted-foreground">
-											{d.doc_type ?? "—"} · {d.status}
-										</p>
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-xs text-muted-foreground">
+												{d.doc_type ?? "—"}
+											</span>
+											<span className="font-mono text-xs text-muted-foreground">
+												·
+											</span>
+											<RecentUploadStatus status={d.status} />
+										</div>
 									</div>
 									<time className="font-mono text-xs text-muted-foreground">
 										{new Date(d.created_at).toLocaleString()}
