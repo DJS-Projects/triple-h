@@ -10,6 +10,7 @@ from app.middleware import TimingMiddleware
 from app.observability import init_growthbook, init_otel
 from app.routes.extract import router as extract_router
 from app.routes.documents import router as documents_router
+from app.routes.jobs import router as jobs_router
 from app.routes.refine import router as refine_router
 from app.config import settings
 
@@ -78,6 +79,7 @@ app.include_router(
 
 # Document extraction + persistence
 app.include_router(extract_router)
+app.include_router(jobs_router)
 app.include_router(documents_router)
 
 # VLM refinement of OCR scaffolds
