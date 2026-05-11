@@ -1,15 +1,20 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import {
+	AlertTriangle,
+	CheckCircle2,
+	CircleSlash,
+	Loader2,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cancelJob } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import type { SubmittedJob } from "@/components/upload-dropzone";
 
-// SSE frame shape — mirrors backend JobStatusResponse. We keep this typed
-// in-component (instead of importing from openapi-client) because it's
-// already a server-validated shape; pinning the relevant fields keeps the
-// component decoupled from openapi regen churn.
+// SSE frame shape — mirrors backend JobStatusResponse. Pinned to the
+// fields this component actually uses so openapi regen churn doesn't ripple
+// through unless a field this view depends on changes.
 interface JobFrame {
 	job_id: string;
 	document_id: string;
@@ -26,8 +31,6 @@ interface JobFrame {
 interface JobsPanelProps {
 	jobs: SubmittedJob[];
 	onRemove: (jobId: string) => void;
-	// false during the initial hydration fetch so the panel can render a
-	// neutral loading line instead of a misleading "No jobs yet" state.
 	hydrated: boolean;
 }
 
@@ -76,21 +79,51 @@ function durationLabel(frame: JobFrame | null, submittedAt: number): string {
 	return `${elapsed.toFixed(1)}s`;
 }
 
+// State icon shown on the left of each row. Augments the textual status
+// with a quick-scan visual so users can read down the list and tell at a
+// glance which rows are alive vs done.
+function StateIcon({ frame }: { frame: JobFrame | null }) {
+	const status = frame?.status;
+	const cancelled = frame?.error?.startsWith("cancelled");
+	if (!status || status === "pending" || status === "running") {
+		return (
+			<Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-blue" />
+		);
+	}
+	if (status === "succeeded") {
+		return (
+			<CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
+		);
+	}
+	if (cancelled) {
+		return (
+			<CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" />
+		);
+	}
+	return <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />;
+}
+
+interface JobRowProps {
+	job: SubmittedJob;
+	selected: boolean;
+	selectMode: boolean;
+	onToggleSelect: (jobId: string) => void;
+	onRemove: (jobId: string) => void;
+}
+
 function JobRow({
 	job,
+	selected,
+	selectMode,
+	onToggleSelect,
 	onRemove,
-}: {
-	job: SubmittedJob;
-	onRemove: (jobId: string) => void;
-}) {
+}: JobRowProps) {
 	const [frame, setFrame] = useState<JobFrame | null>(null);
-	const [, setTick] = useState(0); // ticker for live duration on running jobs
+	const [, setTick] = useState(0);
 	const [cancelPending, setCancelPending] = useState(false);
 	const esRef = useRef<EventSource | null>(null);
 
 	// SSE subscription — one per job, closes on terminal frame or unmount.
-	// The /api/jobs/[id]/stream proxy forwards the backend's poll-based
-	// stream, so each row gets ~500ms-latency updates.
 	useEffect(() => {
 		const es = new EventSource(`/api/jobs/${job.job_id}/stream`);
 		esRef.current = es;
@@ -107,9 +140,8 @@ function JobRow({
 			}
 		});
 		es.onerror = () => {
-			// Don't auto-close on transient error; the browser will retry per
-			// the SSE retry hint. If it stays dead, the user can dismiss the
-			// row and refetch by-id later.
+			// Don't auto-close on transient error; the SSE retry hint lets
+			// the browser reconnect. If it stays dead, the user can dismiss.
 		};
 		return () => {
 			es.close();
@@ -117,8 +149,7 @@ function JobRow({
 		};
 	}, [job.job_id]);
 
-	// Re-render every 500ms while a job is in flight so the elapsed counter
-	// stays live without piping per-frame snapshots from the backend.
+	// Re-render every 500ms while in-flight so the elapsed counter ticks.
 	useEffect(() => {
 		if (frame && (frame.status === "succeeded" || frame.status === "failed")) {
 			return;
@@ -138,21 +169,23 @@ function JobRow({
 		const result = await cancelJob(job.job_id);
 		setCancelPending(false);
 		if (!("error" in result)) {
-			// Server returned the (possibly updated) snapshot — reflect it
-			// immediately instead of waiting for the next SSE tick.
 			setFrame(result as JobFrame);
 		}
 	};
 
 	return (
-		<li className="flex items-center gap-3 px-4 py-3">
-			<div className="flex w-4 shrink-0 items-center justify-center">
-				{active ? (
-					<Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" />
-				) : null}
+		<li
+			className={`grid items-center gap-3 px-4 py-3 ${
+				selectMode
+					? "grid-cols-[1.25rem_minmax(0,1fr)_1.5rem]"
+					: "grid-cols-[1.25rem_minmax(0,1fr)]"
+			}`}
+		>
+			<div className="flex items-center justify-center">
+				<StateIcon frame={frame} />
 			</div>
 
-			<div className="min-w-0 flex-1">
+			<div className="min-w-0">
 				<div className="flex items-baseline gap-2">
 					{succeeded ? (
 						<Link
@@ -168,7 +201,7 @@ function JobRow({
 						{job.model}
 					</span>
 				</div>
-				<div className="flex items-baseline gap-2 font-mono text-xs">
+				<div className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
 					<span className={statusTone(frame)}>
 						{stageLabel(frame, job.dedup_status)}
 					</span>
@@ -190,6 +223,28 @@ function JobRow({
 							<span className="text-muted-foreground">deduped</span>
 						</>
 					) : null}
+					{/* Inline action link: cancel while active, dismiss when
+					    terminal. Hyperlink-styled rather than buttons so it
+					    blends with the status line. */}
+					<span className="text-muted-foreground">·</span>
+					{active ? (
+						<button
+							type="button"
+							onClick={handleCancel}
+							disabled={cancelPending}
+							className="text-muted-foreground underline-offset-2 hover:text-destructive hover:underline disabled:opacity-50"
+						>
+							{cancelPending ? "cancelling…" : "cancel"}
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => onRemove(job.job_id)}
+							className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+						>
+							dismiss
+						</button>
+					)}
 				</div>
 				{frame?.status === "failed" &&
 				!frame.error?.startsWith("cancelled") ? (
@@ -199,66 +254,168 @@ function JobRow({
 				) : null}
 			</div>
 
-			<div className="flex shrink-0 items-center gap-2">
-				{active ? (
-					<button
-						type="button"
-						onClick={handleCancel}
-						disabled={cancelPending}
-						className="rounded-md border px-2 py-1 font-mono text-[11px] text-muted-foreground hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
-					>
-						{cancelPending ? "…" : "cancel"}
-					</button>
-				) : null}
-				{succeeded ? (
-					<Link
-						href={`/documents/${job.document_id}`}
-						className="rounded-md border px-2 py-1 font-mono text-[11px] text-foreground hover:bg-muted"
-					>
-						open →
-					</Link>
-				) : null}
-				{terminal ? (
-					<button
-						type="button"
-						onClick={() => onRemove(job.job_id)}
-						className="rounded-md p-1 text-muted-foreground hover:text-foreground"
-						aria-label="dismiss"
-					>
-						<X className="h-3.5 w-3.5" />
-					</button>
-				) : null}
-			</div>
+			{/* Right-side checkbox — only rendered while the panel is in
+			    select mode. Disabled for non-terminal rows since bulk
+			    dismiss only makes sense after the job has finished. */}
+			{selectMode ? (
+				<label className="flex items-center justify-center">
+					<input
+						type="checkbox"
+						checked={selected}
+						onChange={() => onToggleSelect(job.job_id)}
+						disabled={!terminal}
+						aria-label={
+							terminal
+								? `select ${job.filename} for bulk dismiss`
+								: `${job.filename} cannot be selected while active`
+						}
+						className="h-4 w-4 cursor-pointer rounded border-input accent-brand-blue disabled:cursor-not-allowed disabled:opacity-30"
+					/>
+				</label>
+			) : null}
 		</li>
 	);
 }
 
 export function JobsPanel({ jobs, onRemove, hydrated }: JobsPanelProps) {
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	// Select mode hides the checkboxes by default — the user opts in via
+	// the "Select" toggle in the header. Bulk operations only make sense
+	// when the user is intentionally curating the list, so keeping it off
+	// by default lets the panel stay scannable in the common case.
+	const [selectMode, setSelectMode] = useState(false);
+
+	// Drop selections when their underlying row leaves the list. Otherwise
+	// stale ids would accumulate and the bulk-dismiss bar would lie about
+	// the count.
+	useEffect(() => {
+		const present = new Set(jobs.map((j) => j.job_id));
+		setSelected((prev) => {
+			const next = new Set<string>();
+			for (const id of prev) if (present.has(id)) next.add(id);
+			return next.size === prev.size ? prev : next;
+		});
+	}, [jobs]);
+
+	const onToggleSelect = (jobId: string) => {
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(jobId)) next.delete(jobId);
+			else next.add(jobId);
+			return next;
+		});
+	};
+
+	const dismissSelected = () => {
+		for (const id of selected) onRemove(id);
+		setSelected(new Set());
+	};
+
+	// "Select all" only applies to dismissable rows. Active jobs aren't
+	// selectable (they can't be dismissed mid-run), so calling toggle on
+	// every row would be misleading. Filter to terminal first.
+	const selectAllTerminal = () => {
+		const terminalJobs = jobs.filter((j) => {
+			// We don't know the SSE-derived live status here, only the
+			// initial dedup_status the row was seeded with. That's the
+			// best signal available at the panel level — rows whose live
+			// state has since flipped to terminal will just need an extra
+			// click. Worth-it trade for not lifting per-row SSE state up.
+			return j.dedup_status === "succeeded" || j.dedup_status === "failed";
+		});
+		setSelected(new Set(terminalJobs.map((j) => j.job_id)));
+	};
+
+	const exitSelectMode = () => {
+		setSelectMode(false);
+		setSelected(new Set());
+	};
+
+	const selectedCount = useMemo(() => selected.size, [selected]);
+
 	return (
 		<section className="flex flex-col gap-2">
-			<div className="flex items-baseline justify-between">
-				<h2 className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brand-blue">
-					Active jobs{jobs.length > 0 ? ` (${jobs.length})` : ""}
-				</h2>
-				<p className="font-mono text-[11px] text-muted-foreground">
-					Live status via SSE · click filename to open finished docs
-				</p>
+			<div className="flex items-center justify-between gap-3">
+				{/* Left column: stacked title + meta. Right column: action
+				    buttons aligned to vertical center of the two text rows. */}
+				<div className="flex min-w-0 flex-col gap-1">
+					<h2 className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brand-blue">
+						Active jobs{jobs.length > 0 ? ` (${jobs.length})` : ""}
+					</h2>
+					<p className="font-mono text-[11px] text-muted-foreground">
+						Live status via SSE · click filename to open finished docs
+					</p>
+				</div>
+				<div className="flex shrink-0 items-center gap-2">
+					{selectMode ? (
+						<>
+							<Button size="sm" onClick={selectAllTerminal}>
+								Select all
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={exitSelectMode}
+							>
+								Done
+							</Button>
+						</>
+					) : jobs.length > 0 ? (
+						<Button size="sm" onClick={() => setSelectMode(true)}>
+							Select
+						</Button>
+					) : null}
+				</div>
 			</div>
-			{!hydrated ? (
-				<p className="border-y px-4 py-6 text-center font-mono text-xs text-muted-foreground">
-					Loading recent jobs…
-				</p>
-			) : jobs.length === 0 ? (
-				<p className="border-y px-4 py-6 text-center font-mono text-xs text-muted-foreground">
-					No jobs yet. Stage PDFs above and click Submit to queue.
-				</p>
-			) : (
-				<ul className="flex flex-col divide-y border-y">
-					{jobs.map((job) => (
-						<JobRow key={job.job_id} job={job} onRemove={onRemove} />
-					))}
-				</ul>
-			)}
+
+			{/* Bulk bar + list share a single border container so the bar
+			    sits flush above the list with no gap. Their internal
+			    separator is a horizontal rule rather than two stacked
+			    border-y edges. */}
+			<div className="flex flex-col border-y">
+				{selectMode && selectedCount > 0 ? (
+					<div className="flex items-center justify-between gap-3 border-b bg-muted/30 py-2 pl-4 pr-0">
+						<p className="font-mono text-xs text-muted-foreground">
+							{selectedCount} selected
+						</p>
+						<div className="flex items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => setSelected(new Set())}
+							>
+								Clear
+							</Button>
+							<Button size="sm" onClick={dismissSelected}>
+								Dismiss {selectedCount}
+							</Button>
+						</div>
+					</div>
+				) : null}
+
+				{!hydrated ? (
+					<p className="px-4 py-6 text-center font-mono text-xs text-muted-foreground">
+						Loading recent jobs…
+					</p>
+				) : jobs.length === 0 ? (
+					<p className="px-4 py-6 text-center font-mono text-xs text-muted-foreground">
+						No jobs yet. Stage PDFs above and click Submit to queue.
+					</p>
+				) : (
+					<ul className="flex flex-col divide-y">
+						{jobs.map((job) => (
+							<JobRow
+								key={job.job_id}
+								job={job}
+								selected={selected.has(job.job_id)}
+								selectMode={selectMode}
+								onToggleSelect={onToggleSelect}
+								onRemove={onRemove}
+							/>
+						))}
+					</ul>
+				)}
+			</div>
 		</section>
 	);
 }
