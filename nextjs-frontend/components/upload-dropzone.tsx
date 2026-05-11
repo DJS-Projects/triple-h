@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Info,
+	Loader2,
+	Trash2,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fetchExtractionModels, submitExtractionJob } from "@/lib/api";
@@ -152,6 +159,14 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
 	const [dragOver, setDragOver] = useState(false);
+	// Track which model notes the user has dismissed within this session.
+	// Keyed by model id so switching models re-shows the new model's note,
+	// while keeping the previously-dismissed one dismissed if they switch
+	// back. State only — no persistence across reloads (notes are short
+	// and the dismiss is cosmetic).
+	const [dismissedNotes, setDismissedNotes] = useState<Set<string>>(
+		() => new Set(),
+	);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -344,16 +359,41 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 				</label>
 			</div>
 
-			{model ? (
-				(() => {
-					const sel = models.find((m) => m.id === model);
-					return sel?.note ? (
-						<p className="font-mono text-[11px] text-muted-foreground">
-							{sel.note}
-						</p>
-					) : null;
-				})()
-			) : null}
+			{model
+				? (() => {
+						const sel = models.find((m) => m.id === model);
+						if (!sel?.note) return null;
+						if (dismissedNotes.has(sel.id)) return null;
+						return (
+							<div className="flex items-center gap-3 rounded-md border border-brand-blue/30 bg-brand-blue/5 py-2 pl-3 pr-2">
+								{/* Icon column with vertical rule. self-stretch
+								    lets the column take full row height so the
+								    border-r renders as a divider regardless of
+								    the text's wrap height. */}
+								<div className="flex shrink-0 items-center self-stretch border-r border-brand-blue/30 pr-3">
+									<Info className="h-3.5 w-3.5 text-brand-blue" />
+								</div>
+								<p className="flex-1 font-mono text-[11px] text-foreground/80">
+									{sel.note}
+								</p>
+								<button
+									type="button"
+									onClick={() =>
+										setDismissedNotes((prev) => {
+											const next = new Set(prev);
+											next.add(sel.id);
+											return next;
+										})
+									}
+									aria-label="dismiss note"
+									className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground"
+								>
+									<X className="h-3 w-3" />
+								</button>
+							</div>
+						);
+					})()
+				: null}
 
 			{staged.length > 0 ? (
 				<>
