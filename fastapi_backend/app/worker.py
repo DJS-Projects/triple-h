@@ -80,13 +80,21 @@ async def _process_job(job: ExtractionJob) -> None:
     blob_store = get_blob_store()
 
     try:
-        # Load the document + raw bytes.
+        # Load the document + raw bytes, and transition its status to
+        # `processing` so the FE recent-uploads list shows a live indicator
+        # instead of the stale `uploaded` label.
         async with async_session_maker() as session:
             doc = await session.get(Document, job.document_id)
             if doc is None:
                 raise RuntimeError(f"document {job.document_id} not found")
             filename = doc.filename
             blob_key = doc.blob_key
+            # Only step forward from a pre-extraction state. Don't overwrite
+            # `extracted` / `reviewed` on retried runs — those should keep
+            # whatever the previous successful run set.
+            if doc.status in ("uploaded", "failed"):
+                doc.status = "processing"
+                await session.commit()
 
         pdf_bytes = await blob_store.get(blob_key)
 
@@ -162,6 +170,14 @@ async def _process_job(job: ExtractionJob) -> None:
                     job_id=job.job_id,
                     error=f"{type(exc).__name__}: {exc}",
                 )
+                # Mirror the failure onto the document so the FE recent-
+                # uploads row shows a clear error state instead of the
+                # stale `processing` label from the claim transition.
+                # Don't downgrade `extracted` / `reviewed` — those came
+                # from an earlier successful run that's still valid.
+                failed_doc = await session.get(Document, job.document_id)
+                if failed_doc is not None and failed_doc.status == "processing":
+                    failed_doc.status = "failed"
                 await session.commit()
         except Exception:  # noqa: BLE001
             _log.exception("follow-up mark_failed for job %s also failed", job.job_id)
