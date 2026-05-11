@@ -162,25 +162,41 @@ async def submit_extraction_job(
         "size_bytes": len(file_bytes),
     }
 
+    # Snapshot document attributes BEFORE handing off to the queue
+    # service. create_or_get_job() does an INSERT-then-catch-IntegrityError
+    # dance; the catch path calls session.rollback() which expires every
+    # ORM instance in the session, including this `document`. After that,
+    # `document.document_id` would trigger an async lazy-load from a sync
+    # context → MissingGreenlet. Capture now, use later.
+    doc_uuid = document.document_id
+    document_id_str = str(doc_uuid)
+    content_sha = document.sha256
+
     result = await job_queue.create_or_get_job(
         session,
-        document_id=document.document_id,
+        document_id=doc_uuid,
         idempotency_key=effective_idem_key,
-        content_hash=document.sha256,
+        content_hash=content_sha,
         model=model,
         doc_type=normalised_doc_type,
         request_meta=request_meta,
     )
-    await session.commit()
 
+    # `result.job` is freshly attached (either flushed insert or re-query
+    # result), so its attrs are populated. Snapshot anyway to dodge the
+    # post-commit expiry trap.
     job = result.job
     job_id_str = str(job.job_id)
+    job_status = job.status
+
+    await session.commit()
+
     return SubmitJobResponse(
         job_id=job_id_str,
-        document_id=str(document.document_id),
+        document_id=document_id_str,
         is_new_document=is_new,
         deduped=not result.created,
-        status=job.status,
+        status=job_status,
         poll_url=f"/jobs/{job_id_str}",
         stream_url=f"/jobs/{job_id_str}/stream",
     )
