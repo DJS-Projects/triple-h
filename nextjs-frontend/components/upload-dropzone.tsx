@@ -5,6 +5,7 @@ import {
 	ChevronRight,
 	Info,
 	Loader2,
+	Plus,
 	Trash2,
 	X,
 } from "lucide-react";
@@ -277,47 +278,34 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 		? DOC_TYPE_LABELS[docType as (typeof DOC_TYPES)[number]]
 		: "Auto-classify";
 
+	const openFilePicker = () => inputRef.current?.click();
+
+	// Shared drag-event handlers — both the empty-state dashed card and
+	// the staged-table card mount these so the user can drop files into
+	// either surface.
+	const dragHandlers = {
+		onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+			e.preventDefault();
+			setDragOver(true);
+		},
+		onDragLeave: () => setDragOver(false),
+		onDrop,
+	};
+
 	return (
 		<div className="flex flex-col gap-4">
-			<div
-				onDragOver={(e) => {
-					e.preventDefault();
-					setDragOver(true);
-				}}
-				onDragLeave={() => setDragOver(false)}
-				onDrop={onDrop}
-				onClick={() => inputRef.current?.click()}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault();
-						inputRef.current?.click();
-					}
-				}}
-				role="button"
-				tabIndex={0}
-				className={`group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-14 text-center transition-colors ${
-					dragOver
-						? "border-foreground bg-muted/40"
-						: "border-border hover:border-foreground/60 hover:bg-muted/30"
-				}`}
-			>
-				<input
-					ref={inputRef}
-					type="file"
-					accept="application/pdf,.pdf"
-					multiple
-					className="hidden"
-					onChange={(e) =>
-						stageFiles(Array.from(e.target.files ?? []))
-					}
-				/>
-				<p className="font-medium">
-					Drop PDFs here or click to choose (multiple allowed)
-				</p>
-				<p className="font-mono text-xs text-muted-foreground">
-					Staged for review before queueing · no jobs fire until you click Submit
-				</p>
-			</div>
+			{/* The file input lives outside the conditional so both states
+			    (empty dashed card + staged table's "Add more files" button)
+			    can trigger the same picker without duplicating the element
+			    or losing the ref on transition. */}
+			<input
+				ref={inputRef}
+				type="file"
+				accept="application/pdf,.pdf"
+				multiple
+				className="hidden"
+				onChange={(e) => stageFiles(Array.from(e.target.files ?? []))}
+			/>
 
 			<div className="flex flex-wrap items-center gap-3">
 				<label className="flex items-center gap-2 text-sm">
@@ -395,59 +383,133 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 					})()
 				: null}
 
-			{staged.length > 0 ? (
-				<>
-					<div className="flex flex-col gap-1">
-						<h3 className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brand-blue">
-							Staged for queue
-						</h3>
+			{/* Single drop-target container that morphs between empty and
+			    staged states. Keeping one container means the drop zone
+			    never moves on the page — first drop and subsequent drops
+			    land in the same visual region. Empty = dashed border +
+			    centered prompt + whole-region click. Staged = solid border
+			    + header + table + add-more. Drag-over overlays both. */}
+			<div
+				{...dragHandlers}
+				{...(staged.length === 0
+					? {
+							onClick: openFilePicker,
+							onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									openFilePicker();
+								}
+							},
+							role: "button" as const,
+							tabIndex: 0,
+						}
+					: {})}
+				className={`relative flex flex-col rounded-lg border-2 transition-colors ${
+					staged.length === 0
+						? `cursor-pointer items-center justify-center gap-3 border-dashed px-6 py-14 text-center ${
+								dragOver
+									? "border-foreground bg-muted/40"
+									: "border-border hover:border-foreground/60 hover:bg-muted/30"
+							}`
+						: `gap-3 border-solid p-3 ${
+								dragOver
+									? "border-foreground/60"
+									: "border-border"
+							}`
+				}`}
+			>
+				{/* Drag overlay — pointer-events-none so drop events still
+				    reach the container handler. Only shown in staged state;
+				    empty state already signals drop-readiness through the
+				    dashed border + hover styling. */}
+				{dragOver && staged.length > 0 ? (
+					<div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-foreground/40 bg-background/60 backdrop-blur-sm">
+						<p className="font-display text-base font-semibold text-foreground">
+							Drop PDFs to add to the queue
+						</p>
 						<p className="font-mono text-[11px] text-muted-foreground">
-							{staged.length} file{staged.length === 1 ? "" : "s"} ·{" "}
-							{formatBytes(totalBytes)} · batch defaults:{" "}
-							<span className="text-foreground">{docTypeDisplay}</span> ·{" "}
-							<span className="text-foreground">{selectedModelLabel}</span>
+							Files append to the staged list — no jobs fire yet
 						</p>
 					</div>
+				) : null}
 
-					<ul className="flex w-full flex-col divide-y border-y">
-						{staged.map((f, i) => (
-							<StagedFileRow
-								key={`${f.name}-${f.size}-${f.lastModified}-${i}`}
-								file={f}
-								index={i}
-								disabled={busy}
-								onRemove={removeFile}
-							/>
-						))}
-					</ul>
+				{staged.length === 0 ? (
+					<>
+						<p className="font-medium">
+							Drop PDFs here or click to choose (multiple allowed)
+						</p>
+						<p className="font-mono text-xs text-muted-foreground">
+							Staged for review before queueing · no jobs fire until you click Submit
+						</p>
+					</>
+				) : (
+					<>
+						<div className="flex flex-col gap-1">
+							<h3 className="font-display text-sm font-semibold uppercase tracking-[0.12em] text-brand-blue">
+								Staged for queue
+							</h3>
+							<p className="font-mono text-[11px] text-muted-foreground">
+								{staged.length} file{staged.length === 1 ? "" : "s"} ·{" "}
+								{formatBytes(totalBytes)} · batch defaults:{" "}
+								<span className="text-foreground">{docTypeDisplay}</span> ·{" "}
+								<span className="text-foreground">
+									{selectedModelLabel}
+								</span>
+							</p>
+						</div>
 
-					<div className="flex items-center justify-between gap-3">
-						<Button
-							variant="outline"
-							onClick={clearAll}
+						<ul className="flex w-full flex-col divide-y border-y">
+							{staged.map((f, i) => (
+								<StagedFileRow
+									key={`${f.name}-${f.size}-${f.lastModified}-${i}`}
+									file={f}
+									index={i}
+									disabled={busy}
+									onRemove={removeFile}
+								/>
+							))}
+						</ul>
+
+						<button
+							type="button"
+							onClick={openFilePicker}
 							disabled={busy}
-							className="text-sm"
+							className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-foreground/60 hover:bg-muted/30 hover:text-foreground disabled:opacity-50"
 						>
-							Clear all
-						</Button>
-						<Button
-							onClick={submitAll}
-							disabled={busy || staged.length === 0}
-							className="text-sm"
-						>
-							{busy ? (
-								<>
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-									Submitting {staged.length}
-								</>
-							) : staged.length === 1 ? (
-								"Submit to queue"
-							) : (
-								`Submit ${staged.length} to queue`
-							)}
-						</Button>
-					</div>
-				</>
+							<Plus className="h-4 w-4" />
+							Add more files
+						</button>
+					</>
+				)}
+			</div>
+
+			{staged.length > 0 ? (
+				<div className="flex items-center justify-end gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={clearAll}
+						disabled={busy}
+					>
+						Clear all
+					</Button>
+					<Button
+						size="sm"
+						onClick={submitAll}
+						disabled={busy || staged.length === 0}
+					>
+						{busy ? (
+							<>
+								<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								Submitting {staged.length}
+							</>
+						) : staged.length === 1 ? (
+							"Submit to queue"
+						) : (
+							`Submit ${staged.length} to queue`
+						)}
+					</Button>
+				</div>
 			) : null}
 
 			{error ? (
