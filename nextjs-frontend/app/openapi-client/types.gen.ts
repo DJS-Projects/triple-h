@@ -239,7 +239,33 @@ export type BodyExtractExtractDocumentStructured = {
     doc_type?: string | null;
     /**
      * Model
-     * LiteLLM model id (gemma-4-31b, gemini-2.5-flash, ...). See GET /extract/models for the full list.
+     * LiteLLM model id (ollama-gemma4-31b, gemma-4-31b, ...). See GET /extract/models for the full list.
+     */
+    model?: string;
+    /**
+     * Dpi
+     * PDF render DPI
+     */
+    dpi?: number;
+};
+
+/**
+ * Body_jobs-submit_extraction_job
+ */
+export type BodyJobsSubmitExtractionJob = {
+    /**
+     * File
+     * PDF or image file
+     */
+    file: Blob | File;
+    /**
+     * Doc Type
+     * Optional manual override: delivery_order | weighing_bill | invoice | petrol_bill. Leave empty to auto-classify.
+     */
+    doc_type?: string | null;
+    /**
+     * Model
+     * LiteLLM model id
      */
     model?: string;
     /**
@@ -497,6 +523,115 @@ export type HttpValidationError = {
 };
 
 /**
+ * JobListItem
+ * Listing-flavoured projection of an extraction_job row.
+ *
+ * Includes the human-meaningful display fields (filename, model) so the
+ * FE can render the queue without joining to Document.
+ */
+export type JobListItem = {
+    /**
+     * Job Id
+     */
+    job_id: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Filename
+     */
+    filename: string | null;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Stage
+     */
+    stage: string | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Run Id
+     */
+    run_id: number | null;
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Deduped
+     */
+    deduped: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+};
+
+/**
+ * JobStatusResponse
+ * Job status snapshot for polling.
+ */
+export type JobStatusResponse = {
+    /**
+     * Job Id
+     */
+    job_id: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Stage
+     */
+    stage: string | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Run Id
+     */
+    run_id: number | null;
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+};
+
+/**
  * PageBlocksResponse
  */
 export type PageBlocksResponse = {
@@ -732,6 +867,41 @@ export type StructuredExtractResponse = {
      * Checkpoint Id
      */
     checkpoint_id?: string | null;
+};
+
+/**
+ * SubmitJobResponse
+ * 202 Accepted response when a job is queued (or reused).
+ */
+export type SubmitJobResponse = {
+    /**
+     * Job Id
+     */
+    job_id: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Is New Document
+     */
+    is_new_document: boolean;
+    /**
+     * Deduped
+     */
+    deduped: boolean;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Poll Url
+     */
+    poll_url: string;
+    /**
+     * Stream Url
+     */
+    stream_url: string;
 };
 
 /**
@@ -1324,6 +1494,161 @@ export type ExtractReextractDocumentResponses = {
 
 export type ExtractReextractDocumentResponse = ExtractReextractDocumentResponses[keyof ExtractReextractDocumentResponses];
 
+export type JobsSubmitExtractionJobData = {
+    body: BodyJobsSubmitExtractionJob;
+    headers?: {
+        /**
+         * Idempotency-Key
+         * Client-supplied UUID (or any stable string) representing this upload intent. Same key + active job = returns the existing job, no duplicate work. Server generates one if omitted (then the only dedup is via content_hash).
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/extract/jobs';
+};
+
+export type JobsSubmitExtractionJobErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsSubmitExtractionJobError = JobsSubmitExtractionJobErrors[keyof JobsSubmitExtractionJobErrors];
+
+export type JobsSubmitExtractionJobResponses = {
+    /**
+     * Successful Response
+     */
+    202: SubmitJobResponse;
+};
+
+export type JobsSubmitExtractionJobResponse = JobsSubmitExtractionJobResponses[keyof JobsSubmitExtractionJobResponses];
+
+export type JobsListJobsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Statuses
+         */
+        statuses?: string | null;
+    };
+    url: '/jobs';
+};
+
+export type JobsListJobsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsListJobsError = JobsListJobsErrors[keyof JobsListJobsErrors];
+
+export type JobsListJobsResponses = {
+    /**
+     * Response Jobs-List Jobs
+     * Successful Response
+     */
+    200: Array<JobListItem>;
+};
+
+export type JobsListJobsResponse = JobsListJobsResponses[keyof JobsListJobsResponses];
+
+export type JobsGetJobStatusData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/jobs/{job_id}';
+};
+
+export type JobsGetJobStatusErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsGetJobStatusError = JobsGetJobStatusErrors[keyof JobsGetJobStatusErrors];
+
+export type JobsGetJobStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: JobStatusResponse;
+};
+
+export type JobsGetJobStatusResponse = JobsGetJobStatusResponses[keyof JobsGetJobStatusResponses];
+
+export type JobsStreamJobStatusData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/jobs/{job_id}/stream';
+};
+
+export type JobsStreamJobStatusErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsStreamJobStatusError = JobsStreamJobStatusErrors[keyof JobsStreamJobStatusErrors];
+
+export type JobsStreamJobStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type JobsCancelJobRouteData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/jobs/{job_id}/cancel';
+};
+
+export type JobsCancelJobRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JobsCancelJobRouteError = JobsCancelJobRouteErrors[keyof JobsCancelJobRouteErrors];
+
+export type JobsCancelJobRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: JobStatusResponse;
+};
+
+export type JobsCancelJobRouteResponse = JobsCancelJobRouteResponses[keyof JobsCancelJobRouteResponses];
+
 export type DocumentsListDocumentsData = {
     body?: never;
     path?: never;
@@ -1619,5 +1944,5 @@ export type RefineRefineExtractionResponses = {
 export type RefineRefineExtractionResponse = RefineRefineExtractionResponses[keyof RefineRefineExtractionResponses];
 
 export type ClientOptions = {
-    baseURL: `${string}://${string}` | (string & {});
+    baseURL: `${string}://openapi.json` | (string & {});
 };
