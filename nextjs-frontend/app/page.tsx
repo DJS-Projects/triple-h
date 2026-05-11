@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExtractionQueue } from "@/components/extraction-queue";
-import { RecentUploadStatus } from "@/components/recent-upload-status";
+import { RecentUploadsList } from "@/components/recent-uploads-list";
 import { fetchDocumentList } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -39,42 +39,7 @@ export default async function Home() {
 					</Link>
 				</div>
 
-				{items.length === 0 ? (
-					<p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-						Nothing uploaded yet.
-					</p>
-				) : (
-					<ul className="divide-y rounded-md border">
-						{items.map((d) => (
-							<li key={d.document_id}>
-								<Link
-									href={`/documents/${d.document_id}`}
-									className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50"
-								>
-									<div className="min-w-0 flex-1">
-										<p className="truncate font-medium">{d.filename}</p>
-										<div className="flex items-center gap-2">
-											{d.doc_type ? (
-												<>
-													<span className="font-mono text-xs text-muted-foreground">
-														{d.doc_type}
-													</span>
-													<span className="font-mono text-xs text-muted-foreground">
-														·
-													</span>
-												</>
-											) : null}
-											<RecentUploadStatus status={d.status} />
-										</div>
-									</div>
-									<time className="font-mono text-xs text-muted-foreground">
-										{new Date(d.created_at).toLocaleString()}
-									</time>
-								</Link>
-							</li>
-						))}
-					</ul>
-				)}
+				<RecentUploadsList initial={items} />
 			</section>
 		</main>
 	);
