@@ -48,6 +48,17 @@ model_list:
       model: openai/Qwen/Qwen3.5-397B-A17B-FP8-dottxt
       api_base: https://api.doubleword.ai/v1
       api_key: os.environ/DOUBLEWORD_API_KEY
+      # Experimental: disable Qwen3 thinking for latency A/B test.
+      # Qwen3 native flag (vLLM-style chat_template_kwargs). Doubleword
+      # serves an OpenAI-compatible vLLM endpoint, so the kwarg should
+      # pass through. TODO verify by inspecting a response: with thinking
+      # off there should be no <think>...</think> block in the content
+      # and no reasoning_content field.
+      # Refs: https://qwen.readthedocs.io/en/latest/deployment/vllm.html
+      #       https://docs.vllm.ai/en/latest/features/reasoning_outputs/
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: false
 
   # ── Groq Llama 3.3 70B (text-only chat) ───────────────────────────────
   - model_name: groq-llama-3.3-70b
@@ -68,12 +79,25 @@ model_list:
       api_base: https://ollama.com/v1
       api_key: os.environ/OLLAMA_API_KEY
       max_tokens: 8192
+      # Experimental: disable Gemma 4 thinking on Ollama Cloud for
+      # latency A/B test. Ollama 0.6+ accepts `think: false` on
+      # /v1/chat/completions; passes through via extra_body.
+      # Refs: https://docs.ollama.com/capabilities/thinking
+      #       https://ollama.com/blog/thinking
+      extra_body:
+        think: false
 
   # ── Google Gemma 4 31B (vision, open-weights, fallback for Ollama) ────
   - model_name: gemma-4-31b
     litellm_params:
       model: gemini/gemma-4-31b-it
       api_key: os.environ/GOOGLE_API_KEY
+      # Experimental: disable thinking for latency A/B test.
+      # LiteLLM maps reasoning_effort="disable" -> thinking budget 0,
+      # which Gemini renders as generationConfig.thinkingConfig.thinkingBudget=0.
+      # Ref: https://docs.litellm.ai/docs/providers/gemini
+      #      https://docs.litellm.ai/docs/providers/vertex (reasoning_effort mapping table)
+      reasoning_effort: "disable"
 
 router_settings:
   routing_strategy: simple-shuffle
