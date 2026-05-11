@@ -80,11 +80,36 @@ _log = logging.getLogger(__name__)
 _tracer = trace.get_tracer(__name__)
 
 # Vision providers cap how many images per request:
-#   Groq Llama-4-Scout: 5
-#   NVIDIA NIM Llama-3.2-90B-Vision: 1
-# Cap conservatively so the primary model always works; multi-page docs lean
-# on the markdown view (still complete) for context beyond the first pages.
-_MAX_IMAGES_PER_REQUEST = 5
+#   Groq Llama-4-Scout / Maverick: 5 (provider-side hard limit)
+#   NVIDIA NIM Llama-3.2-90B-Vision: 1 (provider-side hard limit)
+#   Gemini Gemma-4-31B / Ollama Cloud Gemma-4-31B: ~16 (much more headroom)
+# The legacy whole-doc path uses the per-model cap directly; the per-page
+# path sends 1 image per page call so the cap only constrains the final
+# consistency-pass LLM call.
+_IMAGE_CAP_BY_MODEL: dict[str, int] = {
+    "groq-llama4-scout": 5,
+    "groq-llama4-maverick": 5,
+    "nim-llama-90b-vision": 1,
+    "gemma-4-31b": 16,
+    "ollama-gemma4-31b": 16,
+}
+_DEFAULT_IMAGE_CAP = 5
+
+
+def _image_cap_for(model_name: str) -> int:
+    """Look up the per-request image cap for a virtual model name.
+
+    Falls back to the conservative default when an unknown model is
+    requested so a misconfiguration never blasts past a provider-side
+    hard limit.
+    """
+    return _IMAGE_CAP_BY_MODEL.get(model_name, _DEFAULT_IMAGE_CAP)
+
+
+# Backwards-compatible alias for the prior whole-doc path. New code
+# should call `_image_cap_for(model)` instead so different models get
+# different caps.
+_MAX_IMAGES_PER_REQUEST = _DEFAULT_IMAGE_CAP
 
 _SCHEMA_BY_TYPE: dict[DocType, type[BaseModel]] = {
     "delivery_order": DeliveryOrder,
@@ -565,12 +590,14 @@ async def extract_structured(
             )
 
         if _is_vision_model(model):
-            capped = rendered_pages[:_MAX_IMAGES_PER_REQUEST]
+            cap = _image_cap_for(model)
+            capped = rendered_pages[:cap]
             if len(rendered_pages) > len(capped):
                 _log.info(
-                    "Capping %d page images to %d (provider image limit)",
+                    "Capping %d page images to %d (provider image limit for %s)",
                     len(rendered_pages),
                     len(capped),
+                    model,
                 )
             llm_images = [
                 BinaryContent(data=p.png_bytes, media_type="image/png") for p in capped
