@@ -60,6 +60,63 @@ services:
           path: ./fastapi_backend/pyproject.toml
         - action: rebuild
           path: ./fastapi_backend/uv.lock
+  # Extraction queue worker. Shares the backend image (same code, same
+  # deps) but runs `python -m app.worker` instead of uvicorn. Polls the
+  # extraction_job table, claims pending jobs, runs the pipeline,
+  # writes results back. Scales horizontally — multiple replicas are
+  # safe thanks to FOR UPDATE SKIP LOCKED in job_queue.claim_next_pending.
+  worker:
+    build:
+      context: fastapi_backend
+    command: ["python", "-m", "app.worker"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/mydatabase
+      # Worker doesn't issue tokens but app.config.Settings requires these
+      # at import time. Mirror the backend's values.
+      - ACCESS_SECRET_KEY=${ACCESS_SECRET_KEY}
+      - RESET_PASSWORD_SECRET_KEY=${RESET_PASSWORD_SECRET_KEY}
+      - VERIFICATION_SECRET_KEY=${VERIFICATION_SECRET_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
+      - CHANDRA_API_KEY=${CHANDRA_API_KEY:-}
+      - LITELLM_BASE_URL=http://litellm:4000
+      - HF_HOME=/root/.cache/huggingface
+      - BLOB_BACKEND=${BLOB_BACKEND:-local}
+      - BLOB_LOCAL_PATH=${BLOB_LOCAL_PATH:-/data/blobs}
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
+      - OTEL_SERVICE_NAME=triple-h-worker
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - GROWTHBOOK_API_HOST=${GROWTHBOOK_API_HOST:-http://growthbook:3100}
+      - GROWTHBOOK_CLIENT_KEY=${GROWTHBOOK_CLIENT_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+    networks:
+      - my_network
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+      # Worker reads the same blob_data volume so it can fetch the PDF
+      # bytes the route persisted at upload time.
+      - blob_data:/data/blobs
+    depends_on:
+      - db
+      - litellm
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./fastapi_backend
+          target: /app
+          ignore:
+            - .venv/
+            - __pycache__/
+            - "*.pyc"
+        - action: rebuild
+          path: ./fastapi_backend/pyproject.toml
+        - action: rebuild
+          path: ./fastapi_backend/uv.lock
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
