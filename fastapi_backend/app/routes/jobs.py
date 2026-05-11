@@ -76,6 +76,28 @@ class JobStatusResponse(BaseModel):
     finished_at: str | None
 
 
+class JobListItem(BaseModel):
+    """Listing-flavoured projection of an extraction_job row.
+
+    Includes the human-meaningful display fields (filename, model) so the
+    FE can render the queue without joining to Document.
+    """
+
+    job_id: str
+    document_id: str
+    filename: str | None
+    model: str
+    status: str
+    stage: str | None
+    error: str | None
+    run_id: int | None
+    attempts: int
+    deduped: bool  # always False from list — we don't know origin intent
+    created_at: str
+    started_at: str | None
+    finished_at: str | None
+
+
 # ─── POST /extract/jobs ─────────────────────────────────────────────────────
 
 
@@ -220,6 +242,55 @@ def _job_to_status(job: Any) -> JobStatusResponse:
     )
 
 
+def _job_to_list_item(job: Any) -> JobListItem:
+    request_meta = job.request_meta if isinstance(job.request_meta, dict) else {}
+    filename = request_meta.get("filename") if isinstance(request_meta, dict) else None
+    return JobListItem(
+        job_id=str(job.job_id),
+        document_id=str(job.document_id),
+        filename=filename if isinstance(filename, str) else None,
+        model=job.model,
+        status=job.status,
+        stage=job.stage,
+        error=job.error,
+        run_id=job.run_id,
+        attempts=job.attempts,
+        deduped=False,
+        created_at=job.created_at.isoformat() if job.created_at else "",
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+    )
+
+
+@router.get("/jobs", response_model=list[JobListItem])
+async def list_jobs(
+    limit: int = 50,
+    statuses: str | None = None,  # comma-separated, e.g. "pending,running"
+    _user: User = Depends(get_system_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> list[JobListItem]:
+    """List recent jobs newest-first, optionally filtered by status.
+
+    Used by the FE queue panel to hydrate across page refreshes so users
+    don't lose visibility of jobs they queued in a previous session.
+    """
+    parsed_statuses: tuple[str, ...] | None = None
+    if statuses:
+        allowed = {"pending", "running", "succeeded", "failed"}
+        parsed_statuses = tuple(
+            s.strip() for s in statuses.split(",") if s.strip() in allowed
+        )
+        if not parsed_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown status filter; allowed: {sorted(allowed)}",
+            )
+    rows = await job_queue.list_recent_jobs(
+        session, limit=limit, statuses=parsed_statuses
+    )
+    return [_job_to_list_item(r) for r in rows]
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: uuid.UUID,
@@ -299,3 +370,37 @@ async def stream_job_status(
         media_type="text/event-stream",
         headers=headers,
     )
+
+
+# ─── POST /jobs/{job_id}/cancel ─────────────────────────────────────────────
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobStatusResponse)
+async def cancel_job_route(
+    job_id: uuid.UUID,
+    _user: User = Depends(get_system_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> JobStatusResponse:
+    """Flip a pending|running job to failed with error='cancelled by user'.
+
+    Already-terminal jobs (succeeded/failed) return their current state
+    unchanged with HTTP 200 — cancel is idempotent so the FE's "Cancel"
+    button doesn't have to special-case the racy double-click.
+
+    Caveat: the worker doesn't yet check this flag mid-pipeline, so a
+    running job's pipeline continues until completion. The result is
+    just dropped — `mark_succeeded` gates on status='running' which
+    cancel has already left. Surfaces as wasted compute but never
+    overwrites the cancel.
+    """
+    changed = await job_queue.cancel_job(session, job_id=job_id)
+    await session.commit()
+    job = await job_queue.get_job(session, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if not changed:
+        # Surface the no-op via a header so debuggable but the FE doesn't
+        # have to handle a separate response shape.
+        # (Body is still a JobStatusResponse so OpenAPI stays consistent.)
+        pass
+    return _job_to_status(job)

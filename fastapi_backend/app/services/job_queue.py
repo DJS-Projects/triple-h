@@ -262,6 +262,67 @@ async def mark_failed(
     await session.execute(stmt)
 
 
+async def list_recent_jobs(
+    session: AsyncSession,
+    *,
+    limit: int = 50,
+    statuses: tuple[str, ...] | None = None,
+) -> list[ExtractionJob]:
+    """List recent jobs, newest-first, optionally filtered by status.
+
+    Used by the FE queue panel to hydrate across page refreshes: any job
+    the worker has touched in this DB row exists here regardless of
+    client state.
+    """
+    stmt = select(ExtractionJob).order_by(ExtractionJob.created_at.desc())
+    if statuses:
+        stmt = stmt.where(ExtractionJob.status.in_(statuses))
+    stmt = stmt.limit(max(1, min(limit, 200)))
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def cancel_job(
+    session: AsyncSession,
+    *,
+    job_id: uuid.UUID,
+) -> bool:
+    """Transition pending|running → failed with error='cancelled by user'.
+
+    Returns True if a state change actually occurred. Already-terminal
+    jobs (succeeded / failed) are no-ops and return False.
+
+    Concurrency: `mark_succeeded` and `mark_failed` both gate on
+    `status='running'`, so a worker racing toward completion can't
+    overwrite the cancel — the worker's update_stage / mark_* calls
+    silently miss zero rows and the pipeline result is dropped on the
+    floor.
+
+    Note: the pipeline itself isn't aborted — it runs to completion in
+    the worker, the result just doesn't get persisted. Co-operative
+    cancellation mid-pipeline is a follow-up.
+    """
+    stmt = (
+        update(ExtractionJob)
+        .where(
+            and_(
+                ExtractionJob.job_id == job_id,
+                ExtractionJob.status.in_(("pending", "running")),
+            )
+        )
+        .values(
+            status="failed",
+            error="cancelled by user",
+            finished_at=datetime.now(timezone.utc),
+            locked_until=None,
+        )
+        .execution_options(synchronize_session="fetch")
+    )
+    result = await session.execute(stmt)
+    rowcount = getattr(result, "rowcount", 0) or 0
+    return int(rowcount) > 0
+
+
 async def requeue_stalled(
     session: AsyncSession,
 ) -> int:
