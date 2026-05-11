@@ -7,11 +7,17 @@ import {
 	documentsGetDocumentDetail,
 	documentsListDocuments,
 	documentsPatchExtraction,
-	extractExtractDocumentStructured,
 	extractListExtractionModels,
 	extractReextractDocument,
+	jobsListJobs,
+	jobsSubmitExtractionJob,
 	refineRefineExtraction,
 } from "@/app/clientService";
+import type {
+	JobListItem,
+	JobStatusResponse,
+	SubmitJobResponse,
+} from "@/app/openapi-client/types.gen";
 import type { FieldEditInput } from "@/lib/definitions";
 
 export type ActionError = { error: string };
@@ -26,9 +32,23 @@ export async function fetchExtractionModels() {
 	return data;
 }
 
-export async function uploadAndExtract(
+// ─── Async job queue (T17) ──────────────────────────────────────────────────
+//
+// `submitExtractionJob` is the queue-aware sibling of `uploadAndExtract`. It
+// hits POST /extract/jobs which returns a 202 immediately with a job_id; the
+// caller then opens an SSE stream (via the /api/jobs/[id]/stream proxy) to
+// watch real pipeline stages instead of fake elapsed-time labels.
+//
+// Idempotency-Key is a per-submission UUID generated client-side. Same key
+// + identical content within the active window returns the same job_id
+// (deduped=true) so accidental double-clicks don't queue twice.
+
+export type SubmitJobResult = ActionError | { job: SubmitJobResponse };
+
+export async function submitExtractionJob(
 	formData: FormData,
-): Promise<ActionError | { documentId: string }> {
+	idempotencyKey: string,
+): Promise<SubmitJobResult> {
 	const file = formData.get("file");
 	const docType = (formData.get("doc_type") as string | null) ?? "";
 	const model = (formData.get("model") as string | null) ?? "";
@@ -37,7 +57,8 @@ export async function uploadAndExtract(
 		return { error: "missing file" } satisfies ActionError;
 	}
 
-	const { data, error } = await extractExtractDocumentStructured({
+	const { data, error } = await jobsSubmitExtractionJob({
+		headers: { "Idempotency-Key": idempotencyKey },
 		body: {
 			file,
 			doc_type: docType,
@@ -52,11 +73,65 @@ export async function uploadAndExtract(
 			error:
 				typeof detail === "string"
 					? detail
-					: JSON.stringify(detail ?? "extraction failed"),
+					: JSON.stringify(detail ?? "submit failed"),
 		} satisfies ActionError;
 	}
+	return { job: data };
+}
 
-	return { documentId: data.document_id };
+export type JobSnapshotResult = ActionError | JobStatusResponse;
+
+// One-shot poll fallback for clients that can't use SSE (or for the final
+// fetch after stream close to confirm terminal state).
+export async function fetchJobStatus(
+	jobId: string,
+): Promise<JobSnapshotResult> {
+	const res = await fetch(`${process.env.API_BASE_URL}/jobs/${jobId}`, {
+		cache: "no-store",
+	});
+	if (!res.ok) {
+		return { error: `job fetch ${res.status}` } satisfies ActionError;
+	}
+	return (await res.json()) as JobStatusResponse;
+}
+
+export type JobListResult = ActionError | JobListItem[];
+
+// Hydrate the FE queue panel across page refreshes. Filters by status so
+// the panel doesn't re-show every historical job — defaults to the active
+// + recently-terminal slice, which is what users actually want to see.
+export async function fetchRecentJobs(
+	statuses: Array<"pending" | "running" | "succeeded" | "failed"> = [
+		"pending",
+		"running",
+		"succeeded",
+		"failed",
+	],
+	limit: number = 50,
+): Promise<JobListResult> {
+	const { data, error } = await jobsListJobs({
+		query: { statuses: statuses.join(","), limit },
+	});
+	if (error || !data) {
+		return {
+			error: typeof error === "string" ? error : "failed to list jobs",
+		} satisfies ActionError;
+	}
+	return data;
+}
+
+// Cancel a queued/running job. Backend flip is idempotent — calling on an
+// already-terminal job is a no-op that returns the current snapshot, so the
+// FE button doesn't need to debounce double-clicks.
+export async function cancelJob(jobId: string): Promise<JobSnapshotResult> {
+	const res = await fetch(
+		`${process.env.API_BASE_URL}/jobs/${jobId}/cancel`,
+		{ method: "POST", cache: "no-store" },
+	);
+	if (!res.ok) {
+		return { error: `cancel ${res.status}` } satisfies ActionError;
+	}
+	return (await res.json()) as JobStatusResponse;
 }
 
 export async function fetchDocumentDetail(documentId: string) {
