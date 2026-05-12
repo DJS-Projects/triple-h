@@ -9,7 +9,7 @@ GrowthBook flag `use_arq_pipeline`; both share Chandra + render and
 only diverge at the LLM stage. The flag defaults off so a flag-server
 outage routes through the proven single-pass path.
 
-> **Terminology:** ARQ = **Attentive Reasoning Queries** (Galileo / Emcie, [arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). It is a Stage-2 prompting technique — *not* the same thing as the Stage-1 deterministic anchors. The flag name `use_arq_pipeline` informally covers the whole two-stage path. Unrelated to the Python `arq` job-queue library.
+> **Terminology:** ARQ = **Attentive Reasoning Queries** (Karov, Zohar, Marcovitz, 2025 — [arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). It is a Stage-2 prompting technique — *not* the same thing as the Stage-1 deterministic anchors. The flag name `use_arq_pipeline` informally covers the whole two-stage path. Unrelated to the Python `arq` job-queue library.
 
 ## TL;DR
 
@@ -124,7 +124,7 @@ stages around the LLM call:
 
 ### ARQ schemas
 
-**ARQ** = **Attentive Reasoning Queries** ([Galileo / Emcie, arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). A structured-prompting technique: the model fills an ordered sequence of typed reasoning slots before emitting the final answer, so reasoning is inspectable and reproducible. The deterministic anchors from `extract_anchors` are *inputs* to the ARQ prompt, not part of the ARQ technique itself.
+**ARQ** = **Attentive Reasoning Queries** (Karov, Zohar, Marcovitz, 2025 — [arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). A structured-prompting technique: the model fills an ordered sequence of typed reasoning slots before emitting the final answer, so reasoning is inspectable and reproducible. The deterministic anchors from `extract_anchors` are *inputs* to the ARQ prompt, not part of the ARQ technique itself.
 
 Each doc-type has a `*ARQ` wrapper in
 `fastapi_backend/app/services/extraction/arq.py`:

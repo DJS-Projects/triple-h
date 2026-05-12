@@ -28,7 +28,7 @@ Each section has a stable anchor. ADRs marked `Status: Inferred — pending conf
 
 **Question:** Why migrate from single-pass extraction to a two-stage path (deterministic anchors + [ARQ-prompted](https://arxiv.org/abs/2503.03669) LLM), when single-pass is "working"?
 
-> **ARQ = Attentive Reasoning Queries** ([Galileo / Emcie, arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). A Stage 2 prompting technique where the model fills an ordered sequence of typed reasoning slots before emitting the final answer. Distinct from the Stage 1 deterministic anchor extraction (Tier-1 label proximity + Tier-2 table headers). The `use_arq_pipeline` GrowthBook flag names the whole two-stage path informally; the ARQ technique itself is only the Stage 2 prompting strategy.
+> **ARQ = Attentive Reasoning Queries** (Karov, Zohar, Marcovitz, 2025 — [arXiv 2503.03669](https://arxiv.org/abs/2503.03669)). A Stage 2 prompting technique where the model fills an ordered sequence of typed reasoning slots before emitting the final answer. Distinct from the Stage 1 deterministic anchor extraction (Tier-1 label proximity + Tier-2 table headers). The `use_arq_pipeline` GrowthBook flag names the whole two-stage path informally; the ARQ technique itself is only the Stage 2 prompting strategy.
 
 **Where it shows up in code:**
 - Commit `1d8a217` — "deterministic stage 1 foundation" (+1509 lines, no commit body explaining motivation)
