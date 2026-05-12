@@ -1,4 +1,4 @@
-# ADR 0003: ARQ two-stage extraction (anchored, deterministic Stage 1)
+# ADR 0003: Two-stage extraction — deterministic anchors + ARQ-prompted LLM
 
 - **Status:** Inferred — pending confirmation
 - **Date:** 2026-05-01
@@ -21,10 +21,10 @@ Two-stage extraction, gated by a feature flag:
   - **Tier-1 anchors:** label-proximity matching. Scan OCR blocks for known field names ("Invoice No.", "Net Weight", "DO No.") and capture the value in the nearest adjacent block. Record source bbox, page, and matched label.
   - **Tier-2 anchors:** table-header alignment. Parse Chandra-emitted block HTML (table cells carry their column headers) using BeautifulSoup + lxml; map values to their column semantics.
   - Output: a list of `FieldProvenance` records (field name, candidate value, bbox, source kind, confidence).
-- **Stage 2 — anchored LLM extraction:**
-  - Per-doc-type ARQ schemas: `DeliveryOrderARQ`, `WeighingBillARQ`, `InvoiceARQ`, `PetrolBillARQ`. Each schema includes reasoning slots so the model emits its rationale alongside the answer (auditability + DSPy-friendly).
-  - Stage 1 anchors are inlined into the prompt. The model verifies / extracts verbatim where an anchor exists, falls back to free extraction only where it must.
-- **Rollout via GrowthBook flag `use_arq_pipeline`** (default `false`). Legacy single-pass remains the safe path; toggle on for A/B against legacy.
+- **Stage 2 — ARQ-prompted LLM extraction.** ARQ = **Attentive Reasoning Queries** ([Galileo / Emcie, arXiv 2503.03669](https://arxiv.org/abs/2503.03669)): a structured-prompting technique where the model answers an ordered sequence of typed reasoning queries (slots) before emitting the final answer. Each slot focuses attention on one aspect of the input (visual audit, field grounding, ID/code verification) so reasoning becomes inspectable and reproducible instead of opaque.
+  - Per-doc-type ARQ wrapper schemas live in `fastapi_backend/app/services/extraction/arq.py`: `DeliveryOrderARQ`, `WeighingBillARQ`, `InvoiceARQ`, `PetrolBillARQ`. Each wraps the plain extraction schema with reasoning slots (`visual_audit`, `field_grounding`, `id_code_audit`) that the model fills in order.
+  - Stage 1 anchors are inlined into the prompt as evidence. The model verifies / extracts verbatim where an anchor exists, falls back to free extraction only where it must. Anchors are context for ARQ, not part of the ARQ technique itself.
+- **Rollout via GrowthBook flag `use_arq_pipeline`** (default `false`). The flag name is informal — it refers to the whole two-stage path (anchors + ARQ), not the ARQ technique alone. Legacy single-pass remains the safe path; toggle on for A/B against legacy.
 
 ## Consequences
 
@@ -49,4 +49,5 @@ Two-stage extraction, gated by a feature flag:
 - Source: `fastapi_backend/app/services/extraction/anchors.py` (Tier-1 / Tier-2 anchor extraction).
 - Source: `CLAUDE.md` "Active flag" note ("`use_arq_pipeline` — gates the ARQ two-stage extraction path... Default off → legacy single-pass").
 - Source: `fastapi_backend/pyproject.toml` (BeautifulSoup + lxml for block HTML parsing; DSPy for typed Signature programming).
+- ARQ technique paper: [Attentive Reasoning Queries — arXiv 2503.03669](https://arxiv.org/abs/2503.03669).
 - Related: [open-questions.md](../open-questions.md#2-arq-pipeline-migration)

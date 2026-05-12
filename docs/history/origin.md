@@ -34,7 +34,7 @@ In `5e30153` and the handful of commits that followed:
 
 ## Why this framing matters for archaeology
 
-Anyone reading this repo's `git log` straight will see a tidy, opinionated stack: LiteLLM proxy, DoclingDocument IR, Pattern C persistence, OpenTelemetry, GrowthBook flags, an ARQ-anchored deterministic Stage 1. They will not see the six-variant `doc_extractor`, the auth flow that was ripped out (`c96e07a`), the LangChain prompt machinery that was deleted (`629d7ca`), or the items CRUD skeleton (`aa89f5d`) that the FastAPI fullstack template ships with by default.
+Anyone reading this repo's `git log` straight will see a tidy, opinionated stack: LiteLLM proxy, DoclingDocument IR, Pattern C persistence, OpenTelemetry, GrowthBook flags, a deterministic-anchor Stage 1 feeding an ARQ-prompted Stage 2 LLM (ARQ = [Attentive Reasoning Queries](https://arxiv.org/abs/2503.03669)). They will not see the six-variant `doc_extractor`, the auth flow that was ripped out (`c96e07a`), the LangChain prompt machinery that was deleted (`629d7ca`), or the items CRUD skeleton (`aa89f5d`) that the FastAPI fullstack template ships with by default.
 
 The codebase is **fresh enough that all current decisions are intentional, but old enough that some structure carries inherited assumptions**:
 

@@ -19,7 +19,7 @@ ADRs capture decisions that shaped this codebase. Each has a **Status**:
 |------|-----------------------------------------------------------------------|-----------------------------------|------------|
 | 0001 | [Three-stage extraction (Chandra + DoclingDocument IR + vision LLM)](0001-three-stage-extraction.md) | Inferred — pending confirmation   | 2026-03-25 |
 | 0002 | [All LLM traffic via LiteLLM proxy](0002-litellm-proxy.md)            | Accepted                          | 2026-04-10 |
-| 0003 | [ARQ two-stage extraction (anchored, deterministic Stage 1)](0003-arq-pipeline-migration.md) | Inferred — pending confirmation   | 2026-05-01 |
+| 0003 | [Two-stage extraction — deterministic anchors + ARQ-prompted LLM](0003-arq-pipeline-migration.md) | Inferred — pending confirmation   | 2026-05-01 |
 | 0004 | [GrowthBook for feature flags (self-hosted)](0004-growthbook-flags.md) | Inferred — pending confirmation   | 2026-04-28 |
 | 0005 | [Langfuse for LLM observability (via LiteLLM callback)](0005-langfuse-observability.md) | Inferred — pending confirmation   | 2026-04-20 |
 | 0006 | [OpenTelemetry for HTTP / DB / pipeline tracing](0006-opentelemetry-tracing.md) | Inferred — pending confirmation   | 2026-04    |
