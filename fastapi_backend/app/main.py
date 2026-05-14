@@ -7,12 +7,18 @@ from .users import auth_backend, fastapi_users, AUTH_URL_PATH
 from fastapi.middleware.cors import CORSMiddleware
 from .utils import simple_generate_unique_route_id
 from app.middleware import TimingMiddleware
+from app.logging_setup import configure_logging
 from app.observability import init_growthbook, init_otel
 from app.routes.extract import router as extract_router
 from app.routes.documents import router as documents_router
 from app.routes.jobs import router as jobs_router
 from app.routes.refine import router as refine_router
 from app.config import settings
+
+# structlog has to be configured before any module-level loggers fire so
+# all events flow through the trace-context + extraction-context
+# processors. Idempotent — safe under uvicorn --reload.
+configure_logging()
 
 # Dedicated handler on the timing logger. Uvicorn doesn't attach a handler
 # to the root logger (it only configures its own `uvicorn.*` namespace), so
