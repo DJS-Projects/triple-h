@@ -38,6 +38,7 @@ from typing import Any, Final
 
 from bs4 import BeautifulSoup, Tag
 
+from app.logging_setup import get_logger
 from app.services.extraction.preprocess import correct_id_chars
 from app.services.extraction.result import FieldProvenance
 from app.services.extraction.validators import (
@@ -49,6 +50,8 @@ from app.services.extraction.validators import (
     TIN_ANY,
     normalize_plate,
 )
+
+_log = get_logger(__name__)
 
 # ─── Field → label hint phrases ──────────────────────────────────────────────
 #
@@ -258,6 +261,16 @@ def _scan_label_block(
                     confidence=1.0,
                 )
             )
+            _log.info(
+                "anchor_match",
+                tier="label_proximity",
+                field=field,
+                value=value,
+                block_id=block_id,
+                page=page,
+                bbox=bbox,
+                label_text=label_match.group(0),
+            )
     return out
 
 
@@ -343,6 +356,17 @@ def _scan_table_block(
                         page=page,
                         confidence=1.0,
                     )
+                )
+                _log.info(
+                    "anchor_match",
+                    tier="table_header",
+                    field=field,
+                    value=value,
+                    block_id=block_id,
+                    page=page,
+                    bbox=bbox,
+                    col_idx=col_idx,
+                    cell_text=cell_text,
                 )
     return out
 
