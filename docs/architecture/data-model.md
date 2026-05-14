@@ -57,7 +57,7 @@ erDiagram
   }
 
   DOCUMENT_PAGE {
-    uuid document_id PK_FK
+    uuid document_id PK "FK to document"
     int page_no PK
     int width_px
     int height_px
