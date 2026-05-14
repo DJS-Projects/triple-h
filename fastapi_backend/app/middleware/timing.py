@@ -1,7 +1,11 @@
 import logging
 import time
+import uuid
 
+from opentelemetry import trace
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.logging_setup import extraction_id_var, request_start_var
 
 logger = logging.getLogger("triple_h.timing")
 
@@ -9,7 +13,16 @@ logger = logging.getLogger("triple_h.timing")
 class TimingMiddleware:
     """Pure ASGI middleware. Records wall-clock duration per HTTP request.
 
-    Emits a Server-Timing response header and a single log line per request.
+    Three jobs per request:
+
+      1. Emit a Server-Timing response header + one log line.
+      2. Set per-request ContextVars (extraction_id, request_start_perf)
+         so structlog's _extraction_context_processor can attach them
+         to every log event fired inside this request.
+      3. Surface the active OTel trace_id as an `X-Trace-Id` response
+         header so devs can paste it into Jaeger/Tempo/Langfuse to
+         find the trace without grepping logs.
+
     Skips lifespan and websocket scopes.
     """
 
@@ -23,6 +36,14 @@ class TimingMiddleware:
 
         start = time.perf_counter()
         status_code = 0
+        extraction_id = uuid.uuid4().hex[:12]
+
+        # Set ContextVars FIRST so anything that fires during request
+        # handling (route, services, OCR, LLM call) sees them. The
+        # `reset(token)` in finally guarantees they don't leak across
+        # requests handled by the same worker.
+        extraction_token = extraction_id_var.set(extraction_id)
+        start_token = request_start_var.set(start)
 
         async def send_wrapper(message: Message) -> None:
             nonlocal status_code
@@ -33,6 +54,16 @@ class TimingMiddleware:
                 headers.append(
                     (b"server-timing", f"app;dur={duration_ms:.2f}".encode())
                 )
+                headers.append((b"x-extraction-id", extraction_id.encode()))
+                # Surface the trace_id when an OTel span is active.
+                # FastAPI's auto-instrumentation creates a request-root
+                # span before this middleware runs, so the lookup is
+                # cheap and reliable.
+                span = trace.get_current_span()
+                ctx = span.get_span_context() if span else None
+                if ctx is not None and ctx.is_valid:
+                    trace_id_hex = format(ctx.trace_id, "032x")
+                    headers.append((b"x-trace-id", trace_id_hex.encode()))
                 message = {**message, "headers": headers}
             await send(message)
 
@@ -57,3 +88,5 @@ class TimingMiddleware:
                 status_code,
                 duration_ms,
             )
+            extraction_id_var.reset(extraction_token)
+            request_start_var.reset(start_token)
