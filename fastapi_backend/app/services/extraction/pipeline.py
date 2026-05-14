@@ -34,7 +34,6 @@ doesn't pick a provider directly; LiteLLM handles fallback/retry.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from io import BytesIO
@@ -49,6 +48,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
+from app.logging_setup import extraction_id_var, get_logger
 from app.observability import is_feature_on
 from app.services.architecture import (
     DoclingArchitecture,
@@ -76,7 +76,7 @@ from app.services.extraction.result import (
 )
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
 
-_log = logging.getLogger(__name__)
+_log = get_logger(__name__)
 _tracer = trace.get_tracer(__name__)
 
 # Vision providers cap how many images per request:
@@ -329,20 +329,23 @@ async def _run_arq_llm_stage(
     extracted_obj = arq_payload.extracted  # type: ignore[attr-defined]
     extracted_dict: dict[str, Any] = extracted_obj.model_dump()
 
-    # Surface ARQ reasoning slots on the parent span — short enough to be
-    # cheap, valuable for trace UI inspection without parsing JSON dumps.
-    parent_span.set_attribute(
-        "arq.visual_audit",
-        str(getattr(arq_payload, "visual_audit", ""))[:500],
-    )
-    parent_span.set_attribute(
-        "arq.field_grounding",
-        str(getattr(arq_payload, "field_grounding", ""))[:500],
-    )
-    parent_span.set_attribute(
-        "arq.id_code_audit",
-        str(getattr(arq_payload, "id_code_audit", ""))[:500],
-    )
+    # Emit each ARQ reasoning slot as its own structured event. Prior
+    # implementation stuffed truncated (500-char) versions onto the
+    # parent span as attributes — that lost the model's full reasoning,
+    # the very thing this pipeline variant exists to produce. The full
+    # text now lands in OTLP logs (correlated to this span via the
+    # trace_context processor) and on Langfuse via the LiteLLM callback.
+    # Span attribute kept as a tiny preview for trace-UI eyeballing.
+    for slot_name in ("visual_audit", "field_grounding", "id_code_audit"):
+        slot_text = str(getattr(arq_payload, slot_name, ""))
+        _log.info(
+            "arq_slot",
+            slot=slot_name,
+            text=slot_text,
+            text_chars=len(slot_text),
+            schema=arq_schema.__name__,
+        )
+        parent_span.set_attribute(f"arq.{slot_name}_chars", len(slot_text))
 
     return extracted_dict, duration_ms
 
@@ -560,6 +563,15 @@ async def extract_structured(
         root_span.set_attribute("doc_type", doc_type)
         root_span.set_attribute("model", model)
         root_span.set_attribute("dpi", dpi)
+        # Surface the per-request extraction_id from the ContextVar set
+        # by TimingMiddleware so the same id stamps the span attribute
+        # AND every structured log event inside this pipeline (via the
+        # logging_setup processor). Becomes the canonical join key when
+        # correlating Jaeger/Tempo spans with OTLP logs and Langfuse
+        # LLM traces.
+        extraction_id = extraction_id_var.get()
+        if extraction_id is not None:
+            root_span.set_attribute("extraction_id", extraction_id)
 
         schema = _SCHEMA_BY_TYPE[doc_type]
         prompt_intro = _PROMPT_BY_TYPE[doc_type]
@@ -594,10 +606,10 @@ async def extract_structured(
             capped = rendered_pages[:cap]
             if len(rendered_pages) > len(capped):
                 _log.info(
-                    "Capping %d page images to %d (provider image limit for %s)",
-                    len(rendered_pages),
-                    len(capped),
-                    model,
+                    "page_image_cap_applied",
+                    pages_rendered=len(rendered_pages),
+                    pages_sent=len(capped),
+                    model=model,
                 )
             llm_images = [
                 BinaryContent(data=p.png_bytes, media_type="image/png") for p in capped
