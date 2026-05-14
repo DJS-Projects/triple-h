@@ -140,6 +140,8 @@ single-pass code path. Bootstrap steps in `CLAUDE.md:75-87`.
 - Queue mechanics, idempotency, SSE flow: [async-job-queue.md](async-job-queue.md)
 - Table-by-table schema and Alembic migration history: [data-model.md](data-model.md)
 - Bootstrapping the observability triad and reading its UIs: [observability.md](observability.md)
+- Project dependencies and packages: [dependencies.md](dependencies.md)
+- API routing for Auth, Users, Extraction, Jobs, Refinement: [api-routes.md](api-routes.md)
 
 For history and decisions, see [history/timeline.md](../history/timeline.md)
 and the ADR index at [decisions/](../decisions/). Open follow-ups live
