@@ -54,6 +54,11 @@ dependencies = [
     # self-hosted GrowthBook server (gb container in docker-compose)
     # to fetch the current rules + assignments.
     "growthbook>=1.2,<2",
+    # structlog: structured logging with custom processors. Used to
+    # inject OTel trace context (trace_id, span_id) and the per-request
+    # extraction_id + T+elapsed ContextVars into every log event so the
+    # collector correlates logs with their parent spans.
+    "structlog>=25.0,<26",
 ]
 
 [dependency-groups]
