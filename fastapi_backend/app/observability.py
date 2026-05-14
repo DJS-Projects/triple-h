@@ -11,7 +11,12 @@ OpenTelemetry contract:
     twice, so we guard with a module-level flag.
   - When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, spans go to the
     console (stdout → docker logs) — useful for local dev without
-    standing up a collector.
+    standing up a collector. Log export is skipped in this case
+    (stdlib logging via uvicorn already writes to stdout, so devs
+    still see output without buffered OTLP exports going nowhere).
+  - When the endpoint IS set, both spans AND logs go to the collector
+    — log records carry the active trace_id/span_id so the collector
+    can correlate them back to the parent span automatically.
   - Auto-instrumentation covers the three boundary surfaces that
     matter: HTTP requests in (FastAPI), HTTP requests out (httpx —
     every Chandra REST + LiteLLM proxy call), and database queries
@@ -32,10 +37,14 @@ import logging
 from typing import TYPE_CHECKING
 
 from opentelemetry import trace
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -100,6 +109,29 @@ def init_otel(app: FastAPI) -> None:
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(_build_exporter()))
     trace.set_tracer_provider(provider)
+
+    # Logs ride the same collector as spans when OTLP is configured.
+    # When the endpoint is unset (local dev without a collector), skip
+    # log export entirely — stdlib logging still writes to stdout via
+    # uvicorn, so devs still see output. Wiring an OTel handler in this
+    # case would just buffer logs forever.
+    if settings.OTEL_EXPORTER_OTLP_ENDPOINT:
+        log_provider = LoggerProvider(resource=resource)
+        log_provider.add_log_record_processor(
+            BatchLogRecordProcessor(
+                OTLPLogExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
+            )
+        )
+        set_logger_provider(log_provider)
+        # Attach the OTel handler to the root logger so every stdlib
+        # logging call (including structlog's stdlib bridge) gets
+        # exported. Severity floor matches structlog's filter.
+        otel_handler = LoggingHandler(level=logging.INFO, logger_provider=log_provider)
+        logging.getLogger().addHandler(otel_handler)
+        _log.info(
+            "OTel: log export wired to OTLP endpoint %s",
+            settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+        )
 
     # Order matters: instrument the FastAPI app *after* setting the
     # provider so the instrumentor picks up our exporter chain.
