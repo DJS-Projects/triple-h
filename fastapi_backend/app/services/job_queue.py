@@ -34,7 +34,7 @@ from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ExtractionJob
+from app.models import Document, ExtractionJob
 
 _log = logging.getLogger(__name__)
 
@@ -315,10 +315,18 @@ async def cancel_job(
     *,
     job_id: uuid.UUID,
 ) -> bool:
-    """Transition pending|running → failed with error='cancelled by user'.
+    """Transition pending|running → failed AND reset doc.status if needed.
 
     Returns True if a state change actually occurred. Already-terminal
     jobs (succeeded / failed) are no-ops and return False.
+
+    Two-step transition:
+      1. Flip extraction_job: pending|running → failed (error='cancelled by user')
+      2. If the worker had advanced the document to 'processing', reset it
+         to 'uploaded' so the FE sees an idle, re-submittable doc rather
+         than a stuck "processing" indicator. Documents in other states
+         (extracted / reviewed / failed) are NOT touched — they reflect
+         prior runs that the cancel doesn't invalidate.
 
     Concurrency: `mark_succeeded` and `mark_failed` both gate on
     `status='running'`, so a worker racing toward completion can't
@@ -330,6 +338,8 @@ async def cancel_job(
     the worker, the result just doesn't get persisted. Co-operative
     cancellation mid-pipeline is a follow-up.
     """
+    # Step 1: flip the job. Capture document_id from the row so we can
+    # reset its status next. Using RETURNING avoids a separate SELECT.
     stmt = (
         update(ExtractionJob)
         .where(
@@ -344,11 +354,29 @@ async def cancel_job(
             finished_at=datetime.now(timezone.utc),
             locked_until=None,
         )
+        .returning(ExtractionJob.document_id)
         .execution_options(synchronize_session="fetch")
     )
     result = await session.execute(stmt)
-    rowcount = getattr(result, "rowcount", 0) or 0
-    return int(rowcount) > 0
+    row = result.first()
+    if row is None:
+        return False
+
+    # Step 2: unstick the document if the worker had marked it 'processing'.
+    # Idempotent UPDATE — only touches rows currently in 'processing'.
+    doc_id = row[0]
+    await session.execute(
+        update(Document)
+        .where(
+            and_(
+                Document.document_id == doc_id,
+                Document.status == "processing",
+            )
+        )
+        .values(status="uploaded")
+        .execution_options(synchronize_session="fetch")
+    )
+    return True
 
 
 async def requeue_stalled(

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Document, ExtractionJob, ExtractionRun, User
 from app.services.job_queue import (
+    cancel_job,
     create_or_get_job,
     claim_next_pending,
     mark_failed,
@@ -420,3 +421,138 @@ async def test_requeue_skips_fresh_leases(
 
     n = await requeue_stalled(db_session)
     assert n == 0
+
+
+# ─── cancel_job ──────────────────────────────────────────────────────────────
+
+
+async def _refetch_doc(session: AsyncSession, doc_id: uuid.UUID) -> Document | None:
+    """Async-safe read of a document, bypassing identity map (mirror of _refetch)."""
+    stmt = select(Document).where(Document.document_id == doc_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+@pytest.mark.asyncio
+async def test_cancel_pending_job_flips_job_only(
+    db_session: AsyncSession, test_document: Document
+) -> None:
+    """Cancelling a pending job: job → failed, doc still 'uploaded' (worker never touched it)."""
+    created = await create_or_get_job(
+        db_session,
+        document_id=test_document.document_id,
+        idempotency_key="cancel-p1",
+        content_hash="hash-cp1",
+        model="m",
+        doc_type=None,
+    )
+    await db_session.commit()
+
+    changed = await cancel_job(db_session, job_id=created.job.job_id)
+    await db_session.commit()
+    assert changed is True
+
+    job = await _refetch(db_session, created.job.job_id)
+    doc = await _refetch_doc(db_session, test_document.document_id)
+    assert job is not None and doc is not None
+    assert job.status == "failed"
+    assert job.error == "cancelled by user"
+    assert doc.status == "uploaded"  # worker never claimed; nothing to reset
+
+
+@pytest.mark.asyncio
+async def test_cancel_running_job_resets_doc_status(
+    db_session: AsyncSession, test_document: Document
+) -> None:
+    """Cancelling a running job: job → failed AND doc 'processing' → 'uploaded'.
+
+    Mirrors the real bug: user cancels while worker is mid-pipeline. Before
+    the fix, doc.status stayed 'processing' forever; now it resets so the FE
+    can re-submit.
+    """
+    await create_or_get_job(
+        db_session,
+        document_id=test_document.document_id,
+        idempotency_key="cancel-r1",
+        content_hash="hash-cr1",
+        model="m",
+        doc_type=None,
+    )
+    await db_session.commit()
+    claimed = await claim_next_pending(db_session)
+    await db_session.commit()
+    assert claimed is not None
+
+    # Simulate the worker's status transition.
+    test_document.status = "processing"
+    await db_session.commit()
+
+    changed = await cancel_job(db_session, job_id=claimed.job_id)
+    await db_session.commit()
+    assert changed is True
+
+    job = await _refetch(db_session, claimed.job_id)
+    doc = await _refetch_doc(db_session, test_document.document_id)
+    assert job is not None and doc is not None
+    assert job.status == "failed"
+    assert doc.status == "uploaded"
+
+
+@pytest.mark.asyncio
+async def test_cancel_does_not_clobber_extracted_doc(
+    db_session: AsyncSession, test_document: Document
+) -> None:
+    """Cancel must NOT downgrade a doc that already finished an earlier run.
+
+    Scenario: doc was extracted on run #1, then a new run #2 was submitted
+    and is pending; user cancels run #2. The doc.status='extracted' from
+    run #1 stays — cancel only resets 'processing' rows.
+    """
+    test_document.status = "extracted"
+    await db_session.commit()
+
+    created = await create_or_get_job(
+        db_session,
+        document_id=test_document.document_id,
+        idempotency_key="cancel-x1",
+        content_hash="hash-cx1",
+        model="m",
+        doc_type=None,
+    )
+    await db_session.commit()
+
+    changed = await cancel_job(db_session, job_id=created.job.job_id)
+    await db_session.commit()
+    assert changed is True
+
+    doc = await _refetch_doc(db_session, test_document.document_id)
+    assert doc is not None
+    assert doc.status == "extracted"  # untouched
+
+
+@pytest.mark.asyncio
+async def test_cancel_terminal_job_is_noop(
+    db_session: AsyncSession, test_document: Document
+) -> None:
+    """Already-failed jobs return False from cancel; doc untouched.
+
+    mark_failed only fires on 'running' rows, so claim first to reach a
+    state where mark_failed can land — otherwise the job stays 'pending'
+    and cancel would happily flip it.
+    """
+    await create_or_get_job(
+        db_session,
+        document_id=test_document.document_id,
+        idempotency_key="cancel-t1",
+        content_hash="hash-ct1",
+        model="m",
+        doc_type=None,
+    )
+    await db_session.commit()
+    claimed = await claim_next_pending(db_session)
+    await db_session.commit()
+    assert claimed is not None
+    await mark_failed(db_session, job_id=claimed.job_id, error="boom")
+    await db_session.commit()
+
+    changed = await cancel_job(db_session, job_id=claimed.job_id)
+    assert changed is False
