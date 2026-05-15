@@ -34,9 +34,11 @@ from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.logging_setup import get_logger
 from app.models import Document, ExtractionJob
 
 _log = logging.getLogger(__name__)
+_event = get_logger("triple_h.job_queue")
 
 
 # Worker lease window — claim sets locked_until=NOW()+this; sweeper
@@ -212,6 +214,16 @@ async def claim_next_pending(
     job = await session.get(ExtractionJob, row[0])
     if job is not None:
         await session.refresh(job)
+        _event.info(
+            "job_state_transition",
+            job_id=str(job.job_id),
+            document_id=str(job.document_id),
+            from_status="pending",
+            to_status="running",
+            actor="worker_claim",
+            attempt=job.attempts,
+            lease_seconds=lease_seconds,
+        )
     return job
 
 
@@ -241,7 +253,12 @@ async def mark_succeeded(
     job_id: uuid.UUID,
     run_id: int,
 ) -> None:
-    """Transition running → succeeded with the produced run_id."""
+    """Transition running → succeeded with the produced run_id.
+
+    Idempotent: silently misses if the row isn't currently 'running'
+    (cancelled or already terminal). The rowcount check tells us
+    whether to emit the transition event — no event on a no-op.
+    """
     stmt = (
         update(ExtractionJob)
         .where(
@@ -259,7 +276,17 @@ async def mark_succeeded(
         )
         .execution_options(synchronize_session="fetch")
     )
-    await session.execute(stmt)
+    result = await session.execute(stmt)
+    rowcount = getattr(result, "rowcount", 0) or 0
+    if int(rowcount) > 0:
+        _event.info(
+            "job_state_transition",
+            job_id=str(job_id),
+            from_status="running",
+            to_status="succeeded",
+            actor="worker_complete",
+            run_id=run_id,
+        )
 
 
 async def mark_failed(
@@ -268,7 +295,12 @@ async def mark_failed(
     job_id: uuid.UUID,
     error: str,
 ) -> None:
-    """Transition running → failed with an error message."""
+    """Transition running → failed with an error message.
+
+    Idempotent: silently misses when the row isn't 'running' (e.g.
+    already cancelled). Event emission gated on rowcount so a no-op
+    doesn't generate a misleading "transition" log.
+    """
     # Truncate to keep audit rows bounded; full trace goes to OTel.
     truncated = error[:2000]
     stmt = (
@@ -287,7 +319,17 @@ async def mark_failed(
         )
         .execution_options(synchronize_session="fetch")
     )
-    await session.execute(stmt)
+    result = await session.execute(stmt)
+    rowcount = getattr(result, "rowcount", 0) or 0
+    if int(rowcount) > 0:
+        _event.info(
+            "job_state_transition",
+            job_id=str(job_id),
+            from_status="running",
+            to_status="failed",
+            actor="worker_error",
+            error_preview=truncated[:200],
+        )
 
 
 async def list_recent_jobs(
@@ -338,8 +380,23 @@ async def cancel_job(
     the worker, the result just doesn't get persisted. Co-operative
     cancellation mid-pipeline is a follow-up.
     """
-    # Step 1: flip the job. Capture document_id from the row so we can
-    # reset its status next. Using RETURNING avoids a separate SELECT.
+    # Step 1: flip the job. Capture (document_id, prior_status) from the
+    # row so we can reset doc status next AND emit a precise transition
+    # event. RETURNING avoids a separate SELECT.
+    #
+    # `extraction_job.status` is read POST-update by RETURNING, so we
+    # subquery for the prior status before the UPDATE lands. Simpler:
+    # read prior status via SELECT first since cancels are rare.
+    prior = await session.execute(
+        select(ExtractionJob.status, ExtractionJob.document_id).where(
+            ExtractionJob.job_id == job_id
+        )
+    )
+    prior_row = prior.first()
+    if prior_row is None:
+        return False
+    prior_status, doc_id = prior_row
+
     stmt = (
         update(ExtractionJob)
         .where(
@@ -354,18 +411,16 @@ async def cancel_job(
             finished_at=datetime.now(timezone.utc),
             locked_until=None,
         )
-        .returning(ExtractionJob.document_id)
         .execution_options(synchronize_session="fetch")
     )
     result = await session.execute(stmt)
-    row = result.first()
-    if row is None:
+    rowcount = getattr(result, "rowcount", 0) or 0
+    if int(rowcount) == 0:
         return False
 
     # Step 2: unstick the document if the worker had marked it 'processing'.
     # Idempotent UPDATE — only touches rows currently in 'processing'.
-    doc_id = row[0]
-    await session.execute(
+    doc_reset = await session.execute(
         update(Document)
         .where(
             and_(
@@ -375,6 +430,17 @@ async def cancel_job(
         )
         .values(status="uploaded")
         .execution_options(synchronize_session="fetch")
+    )
+    doc_status_changed = int(getattr(doc_reset, "rowcount", 0) or 0) > 0
+
+    _event.info(
+        "job_state_transition",
+        job_id=str(job_id),
+        document_id=str(doc_id),
+        from_status=prior_status,
+        to_status="failed",
+        actor="user_cancel",
+        doc_status_reset=doc_status_changed,
     )
     return True
 
@@ -387,6 +453,10 @@ async def requeue_stalled(
     Returns the number of jobs requeued. Called periodically by the
     worker's sweeper loop. Stalled = `locked_until < NOW()` AND status
     is still 'running' (worker crashed before transitioning).
+
+    Emits one event per requeue with the job_id so an operator can
+    see which jobs the sweeper touched. RETURNING avoids a separate
+    SELECT for the affected ids.
     """
     stmt = (
         update(ExtractionJob)
@@ -402,11 +472,17 @@ async def requeue_stalled(
             locked_until=None,
             stage=None,
         )
+        .returning(ExtractionJob.job_id)
         .execution_options(synchronize_session="fetch")
     )
     result = await session.execute(stmt)
-    # session.execute() on an UPDATE returns a CursorResult exposing
-    # .rowcount, but the stubs widen this to Result[Any]. Pull via getattr
-    # to keep mypy happy without a runtime cast.
-    rowcount = getattr(result, "rowcount", 0) or 0
-    return int(rowcount)
+    requeued_ids = [str(row[0]) for row in result.fetchall()]
+    for jid in requeued_ids:
+        _event.info(
+            "job_state_transition",
+            job_id=jid,
+            from_status="running",
+            to_status="pending",
+            actor="sweeper_requeue",
+        )
+    return len(requeued_ids)

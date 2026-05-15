@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.logging_setup import get_logger
 from app.models import (
     Document,
     DocumentPage,
@@ -30,6 +31,8 @@ from app.services.blob_store import (
     page_key,
     sha256_hex,
 )
+
+_event = get_logger("triple_h.persistence")
 
 # Bump when the `extraction_run.payload` shape changes incompatibly.
 PAYLOAD_SCHEMA_VERSION = "extraction.v1"
@@ -157,9 +160,20 @@ async def record_extraction_run(
     )
     session.add(run)
 
+    prior_doc_status = document.status
     document.doc_type = doc_type
     document.status = "extracted"
     await session.flush()
+    if prior_doc_status != "extracted":
+        _event.info(
+            "doc_state_transition",
+            document_id=str(document.document_id),
+            from_status=prior_doc_status,
+            to_status="extracted",
+            actor="pipeline_complete",
+            run_id=run.extraction_run_id,
+            doc_type=doc_type,
+        )
     return run
 
 

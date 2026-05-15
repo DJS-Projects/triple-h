@@ -34,13 +34,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from app.database import async_session_maker
-from app.logging_setup import extraction_id_var, request_start_var
+from app.logging_setup import extraction_id_var, get_logger, request_start_var
 from app.models import Document, ExtractionJob
 from app.services import job_queue, persistence
 from app.services.blob_store import get_blob_store
 from app.services.extraction import extract_structured
 
 _log = logging.getLogger("triple_h.worker")
+_event = get_logger("triple_h.worker")
 
 # Tuning knobs (env override later if needed).
 IDLE_POLL_SECONDS = 2.0  # how long to sleep when the queue is empty
@@ -105,8 +106,17 @@ async def _process_job(job: ExtractionJob) -> None:
             # `extracted` / `reviewed` on retried runs — those should keep
             # whatever the previous successful run set.
             if doc.status in ("uploaded", "failed"):
+                prior_doc_status = doc.status
                 doc.status = "processing"
                 await session.commit()
+                _event.info(
+                    "doc_state_transition",
+                    document_id=str(doc.document_id),
+                    job_id=str(job.job_id),
+                    from_status=prior_doc_status,
+                    to_status="processing",
+                    actor="worker_claim",
+                )
 
         pdf_bytes = await blob_store.get(blob_key)
 
@@ -190,6 +200,15 @@ async def _process_job(job: ExtractionJob) -> None:
                 failed_doc = await session.get(Document, job.document_id)
                 if failed_doc is not None and failed_doc.status == "processing":
                     failed_doc.status = "failed"
+                    _event.info(
+                        "doc_state_transition",
+                        document_id=str(job.document_id),
+                        job_id=str(job.job_id),
+                        from_status="processing",
+                        to_status="failed",
+                        actor="worker_error",
+                        error_type=type(exc).__name__,
+                    )
                 await session.commit()
         except Exception:  # noqa: BLE001
             _log.exception("follow-up mark_failed for job %s also failed", job.job_id)
