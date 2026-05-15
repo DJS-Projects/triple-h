@@ -20,6 +20,7 @@ from app.logging_setup import (
     _extraction_context_processor,
     _trace_context_processor,
     extraction_id_var,
+    langfuse_call_metadata,
     request_start_var,
 )
 
@@ -94,3 +95,32 @@ def test_processors_compose(tracer_provider):
     assert "trace_id" in event
     assert "span_id" in event
     assert "t_elapsed_ms" in event
+
+
+def test_langfuse_metadata_no_extraction_id():
+    """No request scope → empty dict; LiteLLM falls back to per-call traces."""
+    assert langfuse_call_metadata(filename="x.pdf", purpose="classify") == {}
+
+
+def test_langfuse_metadata_full():
+    """All call params present → trace_id, name, session_id, tags populated."""
+    extraction_id_var.set("a1b2c3d4e5f6")
+    meta = langfuse_call_metadata(
+        filename="arfi_8038.pdf",
+        doc_type="invoice",
+        model="ollama-gemma4-31b",
+        purpose="arq_extract",
+    )
+    assert meta["trace_id"] == "a1b2c3d4e5f6"
+    assert meta["session_id"] == "a1b2c3d4e5f6"
+    assert meta["trace_name"] == "arq_extract:arfi_8038.pdf"
+    assert set(meta["tags"]) == {"invoice", "ollama-gemma4-31b", "arq_extract"}
+
+
+def test_langfuse_metadata_partial():
+    """Missing fields are skipped from tags / name without crashing."""
+    extraction_id_var.set("zzz")
+    meta = langfuse_call_metadata(filename="x.pdf")
+    assert meta["trace_id"] == "zzz"
+    assert meta["trace_name"] == "x.pdf"
+    assert meta["tags"] == []

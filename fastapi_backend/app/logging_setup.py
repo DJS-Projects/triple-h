@@ -164,3 +164,52 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     don't use `%` formatting.
     """
     return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
+
+
+# ─── Langfuse trace correlation ─────────────────────────────────────────────
+
+
+def langfuse_call_metadata(
+    *,
+    filename: str | None = None,
+    doc_type: str | None = None,
+    model: str | None = None,
+    purpose: str | None = None,
+) -> dict[str, Any]:
+    """Build the metadata dict passed to LiteLLM on `agent.run()`.
+
+    Groups every LLM call within one extraction under a single Langfuse
+    trace by setting `trace_id` from the per-request extraction_id
+    ContextVar (set by `TimingMiddleware`). The same id stamps every
+    structured log event and the OTel root span — one click navigates
+    Langfuse → OTel logs → spans → HTTP response header.
+
+    Pass-through path: the dict goes into `ModelSettings.extra_body`
+    under the key `"metadata"`. LiteLLM strips `metadata` from the
+    OpenAI request body before forwarding to the upstream provider
+    and feeds it to the Langfuse `success_callback`.
+
+    Returns an empty dict when called outside a request scope (no
+    `extraction_id` set). LiteLLM treats that as "use defaults" —
+    same behaviour as before this wiring was added.
+
+    Args:
+        filename:  source document name (e.g. "arfi_8038.pdf")
+        doc_type:  one of the four DocType labels (delivery_order, etc.)
+        model:     virtual model name from litellm/config.yaml
+        purpose:   sub-stage tag (e.g. "classify", "arq_extract", "refine")
+    """
+    extraction_id = extraction_id_var.get()
+    if extraction_id is None:
+        return {}
+
+    tags = [t for t in (doc_type, model, purpose) if t]
+    name_parts = [p for p in (purpose, filename) if p]
+    trace_name = ":".join(name_parts) if name_parts else f"extraction:{extraction_id}"
+
+    return {
+        "trace_id": extraction_id,
+        "trace_name": trace_name,
+        "session_id": extraction_id,
+        "tags": tags,
+    }

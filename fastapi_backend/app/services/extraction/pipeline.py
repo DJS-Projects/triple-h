@@ -46,9 +46,10 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, BinaryContent, PromptedOutput
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 
 from app.config import settings
-from app.logging_setup import extraction_id_var, get_logger
+from app.logging_setup import extraction_id_var, get_logger, langfuse_call_metadata
 from app.observability import is_feature_on
 from app.services.architecture import (
     DoclingArchitecture,
@@ -289,6 +290,7 @@ async def _run_arq_llm_stage(
     *,
     doc_type: DocType,
     model: str,
+    filename: str,
     prompt_intro: str,
     preprocessed_markdown: str,
     anchors: list[FieldProvenance],
@@ -321,7 +323,19 @@ async def _run_arq_llm_stage(
         llm_span.set_attribute("images_sent", len(llm_images))
         llm_span.set_attribute("markdown_chars", len(preprocessed_markdown))
         llm_start = time.perf_counter()
-        run = await agent.run(user_message)
+        run = await agent.run(
+            user_message,
+            model_settings=ModelSettings(
+                extra_body={
+                    "metadata": langfuse_call_metadata(
+                        filename=filename,
+                        doc_type=doc_type,
+                        model=model,
+                        purpose="arq_extract",
+                    )
+                }
+            ),
+        )
         duration_ms = int((time.perf_counter() - llm_start) * 1000)
 
     arq_payload: BaseModel = run.output
@@ -629,6 +643,7 @@ async def extract_structured(
             extracted_dict, envelope = await _run_arq_path(
                 doc_type=doc_type,
                 model=model,
+                filename=filename,
                 prompt_intro=prompt_intro,
                 artifacts=artifacts,
                 llm_images=llm_images,
@@ -640,6 +655,8 @@ async def extract_structured(
             extracted_dict = await _run_single_pass(
                 schema=schema,
                 model=model,
+                filename=filename,
+                doc_type=doc_type,
                 prompt_intro=prompt_intro,
                 markdown=artifacts.markdown,
                 rendered_pages_count=len(rendered_pages),
@@ -669,6 +686,8 @@ async def _run_single_pass(
     *,
     schema: type[BaseModel],
     model: str,
+    filename: str,
+    doc_type: DocType,
     prompt_intro: str,
     markdown: str,
     rendered_pages_count: int,
@@ -690,7 +709,19 @@ async def _run_single_pass(
         llm_span.set_attribute("page_count", rendered_pages_count)
         llm_span.set_attribute("images_sent", len(llm_images))
         llm_span.set_attribute("markdown_chars", len(markdown))
-        run = await agent.run(user_message)
+        run = await agent.run(
+            user_message,
+            model_settings=ModelSettings(
+                extra_body={
+                    "metadata": langfuse_call_metadata(
+                        filename=filename,
+                        doc_type=doc_type,
+                        model=model,
+                        purpose="single_pass_extract",
+                    )
+                }
+            ),
+        )
     out: dict[str, Any] = run.output.model_dump()
     return out
 
@@ -699,6 +730,7 @@ async def _run_arq_path(
     *,
     doc_type: DocType,
     model: str,
+    filename: str,
     prompt_intro: str,
     artifacts: Any,
     llm_images: list[BinaryContent],
@@ -732,6 +764,7 @@ async def _run_arq_path(
     extracted_raw, llm_duration_ms = await _run_arq_llm_stage(
         doc_type=doc_type,
         model=model,
+        filename=filename,
         prompt_intro=prompt_intro,
         preprocessed_markdown=preprocessed_md,
         anchors=anchors,

@@ -20,8 +20,10 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, BinaryContent, PromptedOutput
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 
 from app.config import settings
+from app.logging_setup import langfuse_call_metadata
 from app.services.architecture import DocType
 
 _log = logging.getLogger(__name__)
@@ -63,7 +65,14 @@ class GemmaClassifier:
         png_bytes = await asyncio.to_thread(self._render_page1, pdf_bytes)
         agent = self._build_agent()
         run = await agent.run(
-            [_PROMPT, BinaryContent(data=png_bytes, media_type="image/png")]
+            [_PROMPT, BinaryContent(data=png_bytes, media_type="image/png")],
+            model_settings=ModelSettings(
+                extra_body={
+                    "metadata": langfuse_call_metadata(
+                        filename=filename, model=self.model, purpose="classify"
+                    )
+                }
+            ),
         )
         out: _ClassifierOutput = run.output
         _log.info(
