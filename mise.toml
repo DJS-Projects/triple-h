@@ -138,7 +138,13 @@ run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run alembic revi
 
 [tasks."docker:up"]
 description = "Start all services via Docker Compose"
-run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build -d"
+# --overload: the encrypted .env is authoritative for this project. Without
+# this flag, dotenvx leaves shell-exported vars in place (default behavior),
+# which means a user-wide ~/.zshrc / ~/.bashrc export like
+# `export OLLAMA_API_KEY=ollama` (placeholder for local Ollama CLI) silently
+# shadows the real cloud key in the encrypted .env. Symptom: LiteLLM
+# cascades through invalid-key retries, log flood, traces never land.
+run = "dotenvx run --overload -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build -d"
 
 [tasks."docker:rebuild"]
 description = "Rebuild + force-recreate a service (defaults to backend) so code changes baked into the image actually run"
@@ -148,11 +154,11 @@ description = "Rebuild + force-recreate a service (defaults to backend) so code 
 # fastapi_backend code, run `mise docker:rebuild` to force both a
 # rebuild AND a container recreation. Pass a service name to target
 # something other than backend: `mise docker:rebuild -- frontend`.
-run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up -d --build --force-recreate ${1:-backend}"
+run = "dotenvx run --overload -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up -d --build --force-recreate ${1:-backend}"
 
 [tasks."docker:watch"]
 description = "Start all services with file watch (foreground)"
-run = "dotenvx run -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build --watch"
+run = "dotenvx run --overload -fk .env.keys -f fastapi_backend/.env -f nextjs-frontend/.env -- docker compose up --build --watch"
 
 [tasks."docker:down"]
 description = "Stop all services"
