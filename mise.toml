@@ -8,8 +8,13 @@ node = "latest"
 # ── Setup ───────────────────────────────────────────────────────────────────
 
 [tasks.setup]
-description = "Install all dependencies"
-depends = ["setup:be", "setup:fe"]
+description = "Interactive first-time setup — deps, .env.keys, hooks, docker sanity, next-steps"
+# Drives the whole onboarding: backend + frontend installs, .env.keys
+# presence + 600 perms, decrypt check, pre-commit hooks, docker
+# reachable, then prints a cheat sheet. Idempotent — safe to re-run.
+# The setup:be / setup:fe / setup:hooks primitives below are still
+# callable individually for partial reinstalls.
+run = "python3 scripts/setup.py"
 
 [tasks."setup:be"]
 description = "Install backend dependencies"
