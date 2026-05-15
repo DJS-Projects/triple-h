@@ -24,6 +24,7 @@ file that knows about job table internals.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -37,9 +38,36 @@ from app.models import ExtractionJob
 
 _log = logging.getLogger(__name__)
 
+
 # Worker lease window — claim sets locked_until=NOW()+this; sweeper
-# requeues anything stuck longer.
-DEFAULT_LEASE_SECONDS = 600  # 10 min — covers a slow LLM run with headroom
+# requeues anything stuck longer. 180s (3 min) is comfortable headroom
+# over a ~60-90s freight-doc extraction; tune up only if you genuinely
+# run multi-minute pipelines. Shorter lease = faster recovery when the
+# worker crashes or hangs mid-run.
+#
+# Override via env (EXTRACTION_LEASE_SECONDS=300 mise docker:up) for
+# experiments without a code change.
+def _lease_from_env() -> int:
+    raw = os.getenv("EXTRACTION_LEASE_SECONDS")
+    if raw is None:
+        return 180
+    try:
+        parsed = int(raw)
+    except ValueError:
+        _log.warning(
+            "EXTRACTION_LEASE_SECONDS=%r is not an int; falling back to default 180s",
+            raw,
+        )
+        return 180
+    if parsed < 30:
+        _log.warning(
+            "EXTRACTION_LEASE_SECONDS=%d too low (<30s); clamping to 30s", parsed
+        )
+        return 30
+    return parsed
+
+
+DEFAULT_LEASE_SECONDS = _lease_from_env()
 
 
 @dataclass(frozen=True)
