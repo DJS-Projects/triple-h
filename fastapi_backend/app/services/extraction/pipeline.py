@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, TypeVar
@@ -76,6 +77,12 @@ from app.services.extraction.result import (
     StageOutput,
 )
 from tests_eval.schemas import DeliveryOrder, Invoice, PetrolBill, WeighingBill
+
+# Async-callable signature for the optional stage-progress hook the worker
+# uses to surface granular pipeline progress to the FE. Keeps the pipeline
+# free of any DB or job-queue knowledge — the caller (worker) decides how
+# stages get persisted / streamed. None = no-op (sync /extract routes).
+StageCallback = Callable[[str], Awaitable[None]]
 
 _log = get_logger(__name__)
 _tracer = trace.get_tracer(__name__)
@@ -550,6 +557,7 @@ async def extract_structured(
     model: str = "ollama-gemma4-31b",
     dpi: int = 150,
     architecture: DoclingArchitecture | None = None,
+    on_stage: StageCallback | None = None,
 ) -> ExtractionPipelineResult:
     """One extractor call + page render + LLM call → typed result.
 
@@ -558,8 +566,21 @@ async def extract_structured(
     Pages are always rendered regardless of LLM choice so the persistence
     layer can cache them for the review UI; the LLM only receives images
     when the model is vision-capable.
+
+    `on_stage(name)` fires before each major phase so the worker can stream
+    granular progress to the FE (`classifying`, `ocr`, `anchoring`,
+    `extracting`, `postprocess`). Exceptions in the callback are swallowed
+    — observability must never crash the pipeline.
     """
     arch = architecture or default_architecture()
+
+    async def _stage(name: str) -> None:
+        if on_stage is None:
+            return
+        try:
+            await on_stage(name)
+        except Exception as exc:  # noqa: BLE001 — never let UX hook break extraction
+            _log.warning("on_stage callback failed", stage=name, error=str(exc))
 
     # Outer span covers the entire pipeline. Inner spans (chandra OCR,
     # page render, LLM) hang off this so a single trace captures the
@@ -571,6 +592,7 @@ async def extract_structured(
             # Classifier is a single small vision call (~1s). Sequential
             # because the schema/prompt selected here gates the parallel
             # extraction + render fan-out below.
+            await _stage("classifying")
             with _tracer.start_as_current_span("classify"):
                 doc_type = await arch.classify(pdf_bytes, filename)
 
@@ -606,6 +628,7 @@ async def extract_structured(
             with _tracer.start_as_current_span("pdf2image_render"):
                 return await _render_pages(pdf_bytes, dpi)
 
+        await _stage("ocr")
         extract_task = asyncio.create_task(_extract_traced())
         pages_task = asyncio.create_task(_render_traced())
         artifacts, rendered_pages = await asyncio.gather(extract_task, pages_task)
@@ -650,8 +673,10 @@ async def extract_structured(
                 chandra_seconds=chandra_timings.get("seconds", 0.0),
                 overall_start=overall_start,
                 root_span=root_span,
+                on_stage=_stage,
             )
         else:
+            await _stage("extracting")
             extracted_dict = await _run_single_pass(
                 schema=schema,
                 model=model,
@@ -737,6 +762,7 @@ async def _run_arq_path(
     chandra_seconds: float,
     overall_start: float,
     root_span: Span,
+    on_stage: StageCallback | None = None,
 ) -> tuple[dict[str, Any], ExtractionEnvelope]:
     """ARQ pipeline: preprocess → anchors → ARQ LLM → postprocess → envelope.
 
@@ -744,7 +770,22 @@ async def _run_arq_path(
     surfaces to the FE — no breaking change) plus the full envelope (DB
     persistence so eval can read provenance). All deterministic stages
     are timed under their own spans for OTel visibility.
+
+    `on_stage(name)` is the same FE-progress hook from `extract_structured`;
+    we fire it at each phase boundary so users see anchoring/extracting/
+    postprocess transitions, not just a static "Processing" indicator
+    for the full 60s of ARQ work.
     """
+
+    async def _stage(name: str) -> None:
+        if on_stage is None:
+            return
+        try:
+            await on_stage(name)
+        except Exception:  # noqa: BLE001
+            pass  # already logged at the outer wrapper
+
+    await _stage("anchoring")
     with _tracer.start_as_current_span("preprocess_text") as pp_span:
         preprocessed_md = preprocess_text(artifacts.markdown)
         doc_date = extract_document_date(preprocessed_md)
@@ -761,6 +802,7 @@ async def _run_arq_path(
         anch_span.set_attribute("anchors_raw", len(raw_anchors))
         anch_span.set_attribute("anchors_deduped", len(anchors))
 
+    await _stage("extracting")
     extracted_raw, llm_duration_ms = await _run_arq_llm_stage(
         doc_type=doc_type,
         model=model,
@@ -772,6 +814,7 @@ async def _run_arq_path(
         parent_span=root_span,
     )
 
+    await _stage("postprocess")
     with _tracer.start_as_current_span("postprocess") as post_span:
         # company_registry empty until the gazetteer lands (T10). Field-
         # level normalisation (4dp / ISO date) still runs.

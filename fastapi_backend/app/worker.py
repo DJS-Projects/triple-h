@@ -124,6 +124,12 @@ async def _process_job(job: ExtractionJob) -> None:
 
         # Run the pipeline. Pipeline writes its own OTel spans + Langfuse
         # traces; the worker stays out of that path.
+        #
+        # Pass `set_stage` as the on_stage hook so the pipeline writes
+        # granular sub-stages (classifying / ocr / anchoring / extracting
+        # / postprocess) into job.stage during each phase boundary. The
+        # FE's SSE stream picks these up within its 500ms poll cadence
+        # and updates the per-row label.
         result = await extract_structured(
             pdf_bytes,
             filename,
@@ -132,6 +138,7 @@ async def _process_job(job: ExtractionJob) -> None:
             dpi=job.request_meta.get("dpi", 150)
             if isinstance(job.request_meta, dict)
             else 150,
+            on_stage=set_stage,
         )
 
         await set_stage("persist")

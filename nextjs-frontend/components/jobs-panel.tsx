@@ -41,9 +41,22 @@ function stageLabel(frame: JobFrame | null, fallback: string): string {
 	if (frame.status === "failed") {
 		return frame.error?.startsWith("cancelled") ? "Cancelled" : "Failed";
 	}
+	// Granular stages emitted by extract_structured via the on_stage hook.
+	// `pipeline` is the legacy outer-worker stage; it shows briefly before
+	// the pipeline overwrites with the first inner stage (classifying / ocr).
 	switch (frame.stage) {
+		case "classifying":
+			return "Classifying document";
+		case "ocr":
+			return "Reading text (OCR)";
+		case "anchoring":
+			return "Finding fields";
+		case "extracting":
+			return "Extracting with LLM";
+		case "postprocess":
+			return "Formatting";
 		case "pipeline":
-			return "OCR + LLM extraction";
+			return "Starting extraction";
 		case "persist":
 			return "Saving";
 		default:
