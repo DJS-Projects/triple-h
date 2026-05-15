@@ -132,6 +132,9 @@ services:
       - DOUBLEWORD_API_KEY=${DOUBLEWORD_API_KEY:-}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-triple-h-dev-key}
+      # Toggle to DEBUG for full request-body dumps when debugging
+      # callback/metadata flow. INFO in normal operation.
+      - LITELLM_LOG=${LITELLM_LOG:-INFO}
       # Langfuse callback — captures every LLM call (prompt, response,
       # tokens, cost, latency) into the Langfuse UI. Empty values
       # disable the callback gracefully (LiteLLM logs a warning).

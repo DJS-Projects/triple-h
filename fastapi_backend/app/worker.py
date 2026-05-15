@@ -28,11 +28,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
 import traceback
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from app.database import async_session_maker
+from app.logging_setup import extraction_id_var, request_start_var
 from app.models import Document, ExtractionJob
 from app.services import job_queue, persistence
 from app.services.blob_store import get_blob_store
@@ -75,7 +77,17 @@ async def _stage_callback_factory(
 
 
 async def _process_job(job: ExtractionJob) -> None:
-    """Run the pipeline for one claimed job. Updates job row on exit."""
+    """Run the pipeline for one claimed job. Updates job row on exit.
+
+    Sets the per-extraction ContextVars from `job.job_id` so structlog
+    events, OTel root span attributes, and the Langfuse trace_id
+    metadata helper all share the same correlation key. Without this,
+    the pipeline runs in the worker process with the ContextVars unset
+    (TimingMiddleware never fires here — it's HTTP-only) and Langfuse
+    falls back to auto-generated per-call trace_ids → ungrouped traces.
+    """
+    eid_token = extraction_id_var.set(str(job.job_id))
+    start_token = request_start_var.set(time.perf_counter())
     set_stage = await _stage_callback_factory(job.job_id)
     blob_store = get_blob_store()
 
@@ -181,6 +193,12 @@ async def _process_job(job: ExtractionJob) -> None:
                 await session.commit()
         except Exception:  # noqa: BLE001
             _log.exception("follow-up mark_failed for job %s also failed", job.job_id)
+    finally:
+        # Reset ContextVars so the next iteration of the claim loop
+        # doesn't see stale values if it doesn't enter _process_job
+        # (idle ticks, sweeper-only iterations).
+        extraction_id_var.reset(eid_token)
+        request_start_var.reset(start_token)
 
 
 async def _claim_loop() -> None:
