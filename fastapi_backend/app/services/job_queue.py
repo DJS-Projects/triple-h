@@ -41,6 +41,23 @@ _log = logging.getLogger(__name__)
 _event = get_logger("triple_h.job_queue")
 
 
+# BaseException (not Exception) on purpose — the pipeline wraps its
+# `on_stage` hook in `except Exception` to keep observability bugs
+# from killing extraction. Cooperative cancellation must propagate
+# *through* that wrapper, so we use the same trick asyncio.CancelledError
+# uses (BaseException-derived) to bypass narrow `except Exception` nets.
+class JobCancelledError(BaseException):
+    """Signal that the worker should abort the in-flight pipeline.
+
+    Raised from inside the stage-progress callback when a freshly read
+    job row reveals a user cancel has landed. The worker's outer handler
+    catches this distinctly from regular pipeline failures: cancel has
+    already flipped the row to `failed` and reset doc.status, so the
+    handler must NOT call mark_failed (would no-op anyway, but the
+    logged "FAILED" event would be misleading).
+    """
+
+
 # Worker lease window — claim sets locked_until=NOW()+this; sweeper
 # requeues anything stuck longer. 180s (3 min) is comfortable headroom
 # over a ~60-90s freight-doc extraction; tune up only if you genuinely

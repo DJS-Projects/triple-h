@@ -62,15 +62,36 @@ def _install_signal_handlers(loop: asyncio.AbstractEventLoop) -> None:
 async def _stage_callback_factory(
     job_id: Any,
 ) -> Callable[[str], Awaitable[None]]:
-    """Build a closure that updates `job.stage` from inside the pipeline.
+    """Build a closure that updates `job.stage` AND polls for cancel.
 
-    Currently a no-op placeholder — the pipeline doesn't yet emit stage
-    events to a hook. Wired here so the SSE endpoint has live stage
-    transitions once that integration lands.
+    Each pipeline stage boundary becomes a cancellation checkpoint:
+    we re-read the job row and, if a user cancel has flipped it to
+    `failed` with the `cancelled` error sentinel, raise
+    `JobCancelledError` to abort the in-flight pipeline. BaseException-
+    derived so the pipeline's `except Exception` swallow-wrapper around
+    `on_stage` doesn't eat it.
+
+    Why piggy-back on the stage hook instead of a dedicated cancel poll?
+    Stages already fire 5-7 times per run (classifying / ocr / anchoring
+    / extracting / postprocess / persist), spaced seconds apart — that's
+    a reasonable abort cadence without spinning up a separate poll loop.
+    Worst case (cancel arrives during the LLM call) we still abort at
+    the next stage transition, which is the LLM-completion boundary.
     """
 
     async def _set_stage(stage: str) -> None:
         async with async_session_maker() as session:
+            job = await job_queue.get_job(session, job_id)
+            if job is None:
+                # Row vanished — treat as cancellation. Avoids the worker
+                # ploughing through with no destination row to update.
+                raise job_queue.JobCancelledError(
+                    f"job {job_id} disappeared mid-pipeline"
+                )
+            if job.status == "failed" and (job.error or "").startswith("cancelled"):
+                raise job_queue.JobCancelledError(
+                    f"job {job_id} cancelled by user at stage={stage}"
+                )
             await job_queue.update_stage(session, job_id=job_id, stage=stage)
             await session.commit()
 
@@ -184,6 +205,21 @@ async def _process_job(job: ExtractionJob) -> None:
             run.extraction_run_id,
             result.duration_ms,
         )
+    except job_queue.JobCancelledError as exc:
+        # Cooperative cancellation: user cancel landed mid-pipeline and the
+        # next stage boundary tripped this. No mark_failed (the cancel
+        # route already set status=failed). No doc.status update (cancel
+        # already reset processing → uploaded). No persist of partial work.
+        # Just log at info — this is the happy-path for cancel, not an
+        # error condition.
+        _log.info("job %s cancelled mid-pipeline: %s", job.job_id, exc)
+        _event.info(
+            "job_pipeline_aborted",
+            job_id=str(job.job_id),
+            document_id=str(job.document_id),
+            reason="user_cancel",
+        )
+        return
     except Exception as exc:  # noqa: BLE001 — log + mark failed, don't crash worker
         tb = traceback.format_exc()
         _log.error(

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob } from "@/lib/api";
+import { cancelJob, deleteDocument } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import type { SubmittedJob } from "@/components/upload-dropzone";
 
@@ -177,13 +177,53 @@ function JobRow({
 		frame && (frame.status === "succeeded" || frame.status === "failed");
 	const succeeded = frame?.status === "succeeded";
 
+	// Cancel = stop the job AND clean up the document so it doesn't sit
+	// stranded in `uploaded` state (rendered as "queued" forever) in the
+	// recent-uploads list below. CASCADE on extraction_job.document_id
+	// means deleting the document removes the job row too, so we don't
+	// need a second cancel call after delete.
+	//
+	// Skip the document delete when this row was a deduped re-submission
+	// against an existing document — the doc may have prior successful
+	// extraction_runs we mustn't destroy. In that case we only cancel
+	// the job (legacy behavior), leaving the underlying doc intact.
 	const handleCancel = async () => {
+		const confirmMsg = job.deduped
+			? `Cancel extraction for "${job.filename}"? The document will remain.`
+			: `Cancel and discard "${job.filename}"? This removes the upload and cannot be undone.`;
+		if (!window.confirm(confirmMsg)) return;
+
 		setCancelPending(true);
-		const result = await cancelJob(job.job_id);
-		setCancelPending(false);
-		if (!("error" in result)) {
-			setFrame(result as JobFrame);
+		const cancelResult = await cancelJob(job.job_id);
+		// Discriminate on the success-shape field (`job_id`), NOT on the
+		// presence of `error` — JobStatusResponse always has an `error`
+		// field which after a successful cancel is set to "cancelled by
+		// user". Checking `"error" in cancelResult` would misread that
+		// as an HTTP failure even though the cancel actually worked.
+		if (!("job_id" in cancelResult)) {
+			setCancelPending(false);
+			window.alert(`Cancel failed: ${cancelResult.error}`);
+			return;
 		}
+		setFrame(cancelResult as JobFrame);
+
+		if (job.deduped) {
+			setCancelPending(false);
+			return;
+		}
+
+		const deleteResult = await deleteDocument(job.document_id);
+		setCancelPending(false);
+		if ("error" in deleteResult) {
+			// Job is cancelled; doc remains. Surface so the user can retry
+			// the delete manually from the Documents page if they want
+			// the upload gone entirely.
+			window.alert(
+				`Cancelled, but failed to remove the document: ${deleteResult.error}`,
+			);
+			return;
+		}
+		onRemove(job.job_id);
 	};
 
 	return (
