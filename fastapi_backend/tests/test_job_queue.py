@@ -463,11 +463,13 @@ async def test_cancel_pending_job_flips_job_only(
 async def test_cancel_running_job_resets_doc_status(
     db_session: AsyncSession, test_document: Document
 ) -> None:
-    """Cancelling a running job: job → failed AND doc 'processing' → 'uploaded'.
+    """Cancelling a running job: job → failed AND doc 'processing' → 'cancelled'.
 
     Mirrors the real bug: user cancels while worker is mid-pipeline. Before
-    the fix, doc.status stayed 'processing' forever; now it resets so the FE
-    can re-submit.
+    the fix, doc.status stayed 'processing' forever. The doc now flips to
+    the dedicated `cancelled` terminal state so the FE can render it
+    clearly (vs the old behavior of bouncing back to `uploaded` which
+    rendered as a misleading "queued" spinner).
     """
     await create_or_get_job(
         db_session,
@@ -494,7 +496,7 @@ async def test_cancel_running_job_resets_doc_status(
     doc = await _refetch_doc(db_session, test_document.document_id)
     assert job is not None and doc is not None
     assert job.status == "failed"
-    assert doc.status == "uploaded"
+    assert doc.status == "cancelled"
 
 
 @pytest.mark.asyncio

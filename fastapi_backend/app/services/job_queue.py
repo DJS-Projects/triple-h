@@ -374,28 +374,29 @@ async def cancel_job(
     *,
     job_id: uuid.UUID,
 ) -> bool:
-    """Transition pending|running → failed AND reset doc.status if needed.
+    """Transition pending|running → failed AND flip doc.status to cancelled.
 
     Returns True if a state change actually occurred. Already-terminal
     jobs (succeeded / failed) are no-ops and return False.
 
     Two-step transition:
       1. Flip extraction_job: pending|running → failed (error='cancelled by user')
-      2. If the worker had advanced the document to 'processing', reset it
-         to 'uploaded' so the FE sees an idle, re-submittable doc rather
-         than a stuck "processing" indicator. Documents in other states
-         (extracted / reviewed / failed) are NOT touched — they reflect
-         prior runs that the cancel doesn't invalidate.
+      2. If the worker had advanced the document to 'processing', flip it
+         to 'cancelled' (distinct terminal state) rather than bouncing
+         back to 'uploaded'. The latter rendered as "queued" with a
+         spinner on the FE — misleading since no worker would ever pick
+         it up. Documents in other states (extracted / reviewed / failed)
+         are NOT touched — they reflect prior runs that the cancel
+         doesn't invalidate.
 
     Concurrency: `mark_succeeded` and `mark_failed` both gate on
     `status='running'`, so a worker racing toward completion can't
     overwrite the cancel — the worker's update_stage / mark_* calls
     silently miss zero rows and the pipeline result is dropped on the
-    floor.
-
-    Note: the pipeline itself isn't aborted — it runs to completion in
-    the worker, the result just doesn't get persisted. Co-operative
-    cancellation mid-pipeline is a follow-up.
+    floor. The worker also checks for cancellation at each stage
+    boundary via `JobCancelledError` (see worker.py) so the pipeline
+    aborts cleanly rather than grinding through the LLM call for a
+    result that will never be persisted.
     """
     # Step 1: flip the job. Capture (document_id, prior_status) from the
     # row so we can reset doc status next AND emit a precise transition
@@ -435,8 +436,12 @@ async def cancel_job(
     if int(rowcount) == 0:
         return False
 
-    # Step 2: unstick the document if the worker had marked it 'processing'.
-    # Idempotent UPDATE — only touches rows currently in 'processing'.
+    # Step 2: flip the document to the dedicated `cancelled` terminal
+    # state if the worker had marked it 'processing'. Idempotent UPDATE
+    # — only touches rows currently in 'processing'. We don't downgrade
+    # 'extracted' / 'reviewed' (those reflect prior successful runs);
+    # we also don't touch already-terminal 'failed' / 'rejected' /
+    # 'cancelled' rows for the same reason.
     doc_reset = await session.execute(
         update(Document)
         .where(
@@ -445,7 +450,7 @@ async def cancel_job(
                 Document.status == "processing",
             )
         )
-        .values(status="uploaded")
+        .values(status="cancelled")
         .execution_options(synchronize_session="fetch")
     )
     doc_status_changed = int(getattr(doc_reset, "rowcount", 0) or 0) > 0

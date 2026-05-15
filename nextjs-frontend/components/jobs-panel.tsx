@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob, deleteDocument } from "@/lib/api";
+import { cancelJob, deleteDocument, reextractDocument } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import type { SubmittedJob } from "@/components/upload-dropzone";
 
@@ -34,12 +34,34 @@ interface JobsPanelProps {
 	hydrated: boolean;
 }
 
+// Error-string sentinels emitted by the worker. Pinned here so the FE
+// can render distinct UI for each terminal reason without parsing free-form
+// error strings. Order matters in `stageLabel` — check the more specific
+// prefixes before falling through to generic "Failed".
+const ERROR_CANCELLED_PREFIX = "cancelled";
+const ERROR_UNSUPPORTED_PREFIX = "unsupported document";
+
+// Pull the human-readable reason out of a worker sentinel like
+// `"unsupported document type: research paper layout"` → `"research paper layout"`.
+// We split on the first `": "` rather than slicing by a magic length —
+// length-math against a hardcoded prefix string broke once when the
+// sentinel grew ("unsupported document" → "unsupported document type:").
+// Returns an empty string when no reason follows the sentinel.
+function extractReason(error: string | null | undefined): string {
+	if (!error) return "";
+	const idx = error.indexOf(": ");
+	return idx >= 0 ? error.slice(idx + 2) : "";
+}
+
 function stageLabel(frame: JobFrame | null, fallback: string): string {
 	if (!frame) return fallback;
 	if (frame.status === "pending") return "Queued";
 	if (frame.status === "succeeded") return "Done";
 	if (frame.status === "failed") {
-		return frame.error?.startsWith("cancelled") ? "Cancelled" : "Failed";
+		const err = frame.error ?? "";
+		if (err.startsWith(ERROR_CANCELLED_PREFIX)) return "Cancelled";
+		if (err.startsWith(ERROR_UNSUPPORTED_PREFIX)) return "Not a supported document";
+		return "Failed";
 	}
 	// Granular stages emitted by extract_structured via the on_stage hook.
 	// `pipeline` is the legacy outer-worker stage; it shows briefly before
@@ -69,10 +91,19 @@ function statusTone(frame: JobFrame | null): string {
 	switch (frame.status) {
 		case "succeeded":
 			return "text-emerald-700";
-		case "failed":
-			return frame.error?.startsWith("cancelled")
-				? "text-muted-foreground"
-				: "text-destructive";
+		case "failed": {
+			const err = frame.error ?? "";
+			// Cancelled + unsupported are both user-driven/system-driven
+			// terminal states, not extraction errors — keep them muted
+			// so they don't read as "something broke".
+			if (
+				err.startsWith(ERROR_CANCELLED_PREFIX) ||
+				err.startsWith(ERROR_UNSUPPORTED_PREFIX)
+			) {
+				return "text-muted-foreground";
+			}
+			return "text-destructive";
+		}
 		case "running":
 			return "text-brand-blue";
 		default:
@@ -97,7 +128,9 @@ function durationLabel(frame: JobFrame | null, submittedAt: number): string {
 // glance which rows are alive vs done.
 function StateIcon({ frame }: { frame: JobFrame | null }) {
 	const status = frame?.status;
-	const cancelled = frame?.error?.startsWith("cancelled");
+	const err = frame?.error ?? "";
+	const cancelled = err.startsWith(ERROR_CANCELLED_PREFIX);
+	const unsupported = err.startsWith(ERROR_UNSUPPORTED_PREFIX);
 	if (!status || status === "pending" || status === "running") {
 		return (
 			<Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-blue" />
@@ -108,7 +141,9 @@ function StateIcon({ frame }: { frame: JobFrame | null }) {
 			<CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
 		);
 	}
-	if (cancelled) {
+	// Both cancelled and unsupported share the muted "slash" icon — they're
+	// terminal-but-not-broken states, distinguished by the label text.
+	if (cancelled || unsupported) {
 		return (
 			<CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" />
 		);
@@ -124,6 +159,17 @@ interface JobRowProps {
 	onRemove: (jobId: string) => void;
 }
 
+// Doc types accepted by the retry-as picker. Mirrors the four supported
+// DocType labels in the backend (services/architecture.py). Kept inline
+// rather than imported because the openapi-generated types would force
+// us through a longer path for a tiny static list.
+const RETRY_DOC_TYPES: ReadonlyArray<{ value: string; label: string }> = [
+	{ value: "delivery_order", label: "Delivery Order" },
+	{ value: "weighing_bill", label: "Weighing Bill" },
+	{ value: "invoice", label: "Invoice" },
+	{ value: "petrol_bill", label: "Petrol Bill" },
+];
+
 function JobRow({
 	job,
 	selected,
@@ -134,6 +180,12 @@ function JobRow({
 	const [frame, setFrame] = useState<JobFrame | null>(null);
 	const [, setTick] = useState(0);
 	const [cancelPending, setCancelPending] = useState(false);
+	// Retry-as picker state. `retryOpen` toggles the inline picker UI;
+	// `retryPending` blocks double-submits while reextract is in flight
+	// (synchronous endpoint, can run 30-200s). One state machine per row;
+	// no global picker because each row's retry is independent.
+	const [retryOpen, setRetryOpen] = useState(false);
+	const [retryPending, setRetryPending] = useState(false);
 	const esRef = useRef<EventSource | null>(null);
 
 	// SSE subscription — one per job, closes on terminal frame or unmount.
@@ -171,56 +223,85 @@ function JobRow({
 		return () => clearInterval(id);
 	}, [frame]);
 
-	const active =
+const active =
 		!frame || frame.status === "pending" || frame.status === "running";
 	const terminal =
 		frame && (frame.status === "succeeded" || frame.status === "failed");
 	const succeeded = frame?.status === "succeeded";
+	// "Retryable" = terminal-but-recoverable: classifier rejection or user
+	// cancel. Failed-with-other-error rows (Chandra outage, LLM 502, etc.)
+	// also support retry conceptually, but the user usually wants the
+	// SAME doc_type for those — for now, gating the picker UI to the two
+	// states where doc_type override is the actual recovery path. Deduped
+	// rows skipped because the underlying doc may have unrelated prior
+	// runs we shouldn't blindly re-extract.
+	const errorStr = frame?.error ?? "";
+	const retryable =
+		frame?.status === "failed" &&
+		(errorStr.startsWith(ERROR_CANCELLED_PREFIX) ||
+			errorStr.startsWith(ERROR_UNSUPPORTED_PREFIX)) &&
+		!job.deduped;
 
-	// Cancel = stop the job AND clean up the document so it doesn't sit
-	// stranded in `uploaded` state (rendered as "queued" forever) in the
-	// recent-uploads list below. CASCADE on extraction_job.document_id
-	// means deleting the document removes the job row too, so we don't
-	// need a second cancel call after delete.
-	//
-	// Skip the document delete when this row was a deduped re-submission
-	// against an existing document — the doc may have prior successful
-	// extraction_runs we mustn't destroy. In that case we only cancel
-	// the job (legacy behavior), leaving the underlying doc intact.
+	// Cancel just stops the job. The backend flips doc.status to
+	// `cancelled` (a distinct terminal state), so the row stays visible
+	// with Retry / Discard actions and the recent-uploads list renders
+	// it cleanly — no spinner, no auto-deletion. The previous "auto-
+	// delete on cancel" behavior destroyed data on a single click
+	// without giving the user a recovery path.
 	const handleCancel = async () => {
-		const confirmMsg = job.deduped
-			? `Cancel extraction for "${job.filename}"? The document will remain.`
-			: `Cancel and discard "${job.filename}"? This removes the upload and cannot be undone.`;
-		if (!window.confirm(confirmMsg)) return;
+		if (!window.confirm(`Cancel extraction for "${job.filename}"?`)) return;
 
 		setCancelPending(true);
 		const cancelResult = await cancelJob(job.job_id);
+		setCancelPending(false);
 		// Discriminate on the success-shape field (`job_id`), NOT on the
 		// presence of `error` — JobStatusResponse always has an `error`
 		// field which after a successful cancel is set to "cancelled by
 		// user". Checking `"error" in cancelResult` would misread that
 		// as an HTTP failure even though the cancel actually worked.
 		if (!("job_id" in cancelResult)) {
-			setCancelPending(false);
 			window.alert(`Cancel failed: ${cancelResult.error}`);
 			return;
 		}
 		setFrame(cancelResult as JobFrame);
+	};
 
-		if (job.deduped) {
-			setCancelPending(false);
+	// Retry-as: re-run the pipeline against the existing document with
+	// an explicit doc_type override. Uses POST /documents/{id}/reextract
+	// which is synchronous — the request blocks until the pipeline
+	// completes (30-200s). On success the doc transitions to `extracted`
+	// (set by record_extraction_run in persistence.py), the recent-
+	// uploads list picks that up on its next poll, and we dismiss this
+	// row from the queue panel.
+	const handleRetry = async (docType: string) => {
+		setRetryPending(true);
+		const result = await reextractDocument(job.document_id, {
+			doc_type: docType,
+			model: job.model,
+		});
+		setRetryPending(false);
+		if ("error" in result) {
+			window.alert(`Retry failed: ${result.error}`);
 			return;
 		}
+		setRetryOpen(false);
+		onRemove(job.job_id);
+	};
 
-		const deleteResult = await deleteDocument(job.document_id);
-		setCancelPending(false);
-		if ("error" in deleteResult) {
-			// Job is cancelled; doc remains. Surface so the user can retry
-			// the delete manually from the Documents page if they want
-			// the upload gone entirely.
-			window.alert(
-				`Cancelled, but failed to remove the document: ${deleteResult.error}`,
-			);
+	// Discard: permanently delete the document and dismiss the row.
+	// Confirms first because the action is irreversible. CASCADE on
+	// extraction_job.document_id removes the failed job rows too.
+	const handleDiscard = async () => {
+		if (
+			!window.confirm(
+				`Permanently delete "${job.filename}"? This cannot be undone.`,
+			)
+		) {
+			return;
+		}
+		const result = await deleteDocument(job.document_id);
+		if ("error" in result) {
+			window.alert(`Delete failed: ${result.error}`);
 			return;
 		}
 		onRemove(job.job_id);
@@ -276,9 +357,14 @@ function JobRow({
 							<span className="text-muted-foreground">deduped</span>
 						</>
 					) : null}
-					{/* Inline action link: cancel while active, dismiss when
-					    terminal. Hyperlink-styled rather than buttons so it
-					    blends with the status line. */}
+					{/* Inline action links. State machine:
+					      active            → cancel
+					      retryable (cancelled / rejected, non-deduped)
+					                        → retry as… | discard
+					      retry picker open → <select> | go pending | back
+					      succeeded / other failed
+					                        → dismiss
+					    Hyperlink styling so they blend with the status line. */}
 					<span className="text-muted-foreground">·</span>
 					{active ? (
 						<button
@@ -289,6 +375,55 @@ function JobRow({
 						>
 							{cancelPending ? "cancelling…" : "cancel"}
 						</button>
+					) : retryable && retryOpen ? (
+						<>
+							<select
+								aria-label={`retry ${job.filename} as`}
+								defaultValue=""
+								disabled={retryPending}
+								onChange={(e) => {
+									if (e.target.value) {
+										void handleRetry(e.target.value);
+									}
+								}}
+								className="rounded border border-input bg-background px-1 py-0.5 text-[11px] disabled:opacity-50"
+							>
+								<option value="" disabled>
+									{retryPending ? "retrying…" : "pick a type…"}
+								</option>
+								{RETRY_DOC_TYPES.map((d) => (
+									<option key={d.value} value={d.value}>
+										{d.label}
+									</option>
+								))}
+							</select>
+							<button
+								type="button"
+								onClick={() => setRetryOpen(false)}
+								disabled={retryPending}
+								className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+							>
+								back
+							</button>
+						</>
+					) : retryable ? (
+						<>
+							<button
+								type="button"
+								onClick={() => setRetryOpen(true)}
+								className="text-brand-blue underline-offset-2 hover:underline"
+							>
+								retry as…
+							</button>
+							<span className="text-muted-foreground">·</span>
+							<button
+								type="button"
+								onClick={handleDiscard}
+								className="text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+							>
+								discard
+							</button>
+						</>
 					) : (
 						<button
 							type="button"
@@ -300,10 +435,19 @@ function JobRow({
 					)}
 				</div>
 				{frame?.status === "failed" &&
-				!frame.error?.startsWith("cancelled") ? (
-					<p className="mt-1 truncate font-mono text-[11px] text-destructive">
-						{frame.error}
-					</p>
+				!(frame.error ?? "").startsWith(ERROR_CANCELLED_PREFIX) ? (
+					(frame.error ?? "").startsWith(ERROR_UNSUPPORTED_PREFIX) ? (
+						// Classifier rejection — show only the short reasoning
+						// extracted from the sentinel, muted. Row stays
+						// visible with Retry-as / Discard actions; user picks.
+						<p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+							{extractReason(frame.error) || "not a supported document type"}
+						</p>
+					) : (
+						<p className="mt-1 truncate font-mono text-[11px] text-destructive">
+							{frame.error}
+						</p>
+					)
 				) : null}
 			</div>
 

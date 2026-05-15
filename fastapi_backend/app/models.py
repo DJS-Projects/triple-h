@@ -71,6 +71,11 @@ DOC_STATUS_VALUES = (
     "extracted",
     "reviewed",
     "failed",
+    # Distinct terminal states added so the FE can render these without
+    # the misleading "queued" spinner that `uploaded`-without-a-pending-job
+    # used to produce. See migration a1b8d3c4e5f6.
+    "rejected",  # classifier said the upload isn't a supported doc type
+    "cancelled",  # user-initiated cancel mid-pipeline
 )
 
 doc_type_enum = Enum(*DOC_TYPE_VALUES, name="doc_type", create_type=True)

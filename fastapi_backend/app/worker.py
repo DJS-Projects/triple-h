@@ -38,6 +38,7 @@ from app.logging_setup import extraction_id_var, get_logger, request_start_var
 from app.models import Document, ExtractionJob
 from app.services import job_queue, persistence
 from app.services.blob_store import get_blob_store
+from app.services.classifier import UnsupportedDocumentError
 from app.services.extraction import extract_structured
 
 _log = logging.getLogger("triple_h.worker")
@@ -205,6 +206,44 @@ async def _process_job(job: ExtractionJob) -> None:
             run.extraction_run_id,
             result.duration_ms,
         )
+    except UnsupportedDocumentError as exc:
+        # Classifier rejected the upload as off-distribution (not one of
+        # delivery_order / weighing_bill / invoice / petrol_bill). Mark
+        # the job failed with a specific sentinel prefix the FE keys on
+        # to render a friendly "rejected" UI and auto-clean the document.
+        # Logged at info (not error) — this is the system working as
+        # designed, not a fault.
+        sentinel = f"unsupported document type: {exc.reasoning}"
+        _log.info("job %s rejected as unsupported: %s", job.job_id, exc.reasoning)
+        _event.info(
+            "job_rejected_unsupported_document",
+            job_id=str(job.job_id),
+            document_id=str(job.document_id),
+            reasoning=exc.reasoning,
+        )
+        try:
+            async with async_session_maker() as session:
+                await job_queue.mark_failed(session, job_id=job.job_id, error=sentinel)
+                # Flip doc.status from `processing` → `rejected` so the
+                # FE renders the dedicated rejection state (with the
+                # classifier's reasoning + Retry-as picker) rather than
+                # the misleading "queued" spinner that `uploaded`
+                # produced before this terminal state existed.
+                rejected_doc = await session.get(Document, job.document_id)
+                if rejected_doc is not None and rejected_doc.status == "processing":
+                    rejected_doc.status = "rejected"
+                    _event.info(
+                        "doc_state_transition",
+                        document_id=str(job.document_id),
+                        job_id=str(job.job_id),
+                        from_status="processing",
+                        to_status="rejected",
+                        actor="classifier_reject",
+                    )
+                await session.commit()
+        except Exception:  # noqa: BLE001
+            _log.exception("follow-up cleanup for rejected job %s failed", job.job_id)
+        return
     except job_queue.JobCancelledError as exc:
         # Cooperative cancellation: user cancel landed mid-pipeline and the
         # next stage boundary tripped this. No mark_failed (the cancel
