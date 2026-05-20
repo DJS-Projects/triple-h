@@ -32,6 +32,26 @@ export async function fetchExtractionModels() {
 	return data;
 }
 
+// Hand-typed because the openapi-client hasn't been regenerated yet —
+// swap to extractGetExtractionFeatureFlags() after the next
+// `bun run generate-client` and this can collapse to the same shape as
+// fetchExtractionModels above. Raw fetch follows the same pattern as
+// fetchJobStatus / cancelJob below for endpoints not yet in the
+// generated SDK.
+export type ExtractionFeatureFlags = { use_arq_pipeline: boolean };
+
+export async function fetchExtractionFeatureFlags(): Promise<
+	ActionError | ExtractionFeatureFlags
+> {
+	const res = await fetch(`${process.env.API_BASE_URL}/extract/feature-flags`, {
+		cache: "no-store",
+	});
+	if (!res.ok) {
+		return { error: `flags fetch ${res.status}` } satisfies ActionError;
+	}
+	return (await res.json()) as ExtractionFeatureFlags;
+}
+
 // ─── Async job queue (T17) ──────────────────────────────────────────────────
 //
 // `submitExtractionJob` is the queue-aware sibling of `uploadAndExtract`. It
@@ -52,6 +72,10 @@ export async function submitExtractionJob(
 	const file = formData.get("file");
 	const docType = (formData.get("doc_type") as string | null) ?? "";
 	const model = (formData.get("model") as string | null) ?? "";
+	// Only forward pipeline_mode when the caller explicitly set it.
+	// Omitting the field defers to the server-side GrowthBook flag, which
+	// is the desired default ("auto" in the FE selector maps to this).
+	const pipelineMode = (formData.get("pipeline_mode") as string | null) ?? "";
 
 	if (!(file instanceof File) || file.size === 0) {
 		return { error: "missing file" } satisfies ActionError;
@@ -63,12 +87,12 @@ export async function submitExtractionJob(
 			file,
 			doc_type: docType,
 			...(model ? { model } : {}),
+			...(pipelineMode ? { pipeline_mode: pipelineMode } : {}),
 		},
 	});
 
 	if (error || !data) {
-		const detail =
-			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		const detail = (error as { detail?: unknown } | undefined)?.detail ?? error;
 		return {
 			error:
 				typeof detail === "string"
@@ -124,10 +148,10 @@ export async function fetchRecentJobs(
 // already-terminal job is a no-op that returns the current snapshot, so the
 // FE button doesn't need to debounce double-clicks.
 export async function cancelJob(jobId: string): Promise<JobSnapshotResult> {
-	const res = await fetch(
-		`${process.env.API_BASE_URL}/jobs/${jobId}/cancel`,
-		{ method: "POST", cache: "no-store" },
-	);
+	const res = await fetch(`${process.env.API_BASE_URL}/jobs/${jobId}/cancel`, {
+		method: "POST",
+		cache: "no-store",
+	});
 	if (!res.ok) {
 		return { error: `cancel ${res.status}` } satisfies ActionError;
 	}
@@ -140,8 +164,7 @@ export async function fetchDocumentDetail(documentId: string) {
 	});
 	if (error || !data) {
 		return {
-			error:
-				typeof error === "string" ? error : "failed to load document",
+			error: typeof error === "string" ? error : "failed to load document",
 		} satisfies ActionError;
 	}
 	return data;
@@ -171,8 +194,7 @@ export async function saveFieldEdits(
 	});
 
 	if (error || !data) {
-		const detail =
-			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		const detail = (error as { detail?: unknown } | undefined)?.detail ?? error;
 		return {
 			error:
 				typeof detail === "string"
@@ -197,8 +219,7 @@ export async function reextractDocument(
 		},
 	});
 	if (error || !data) {
-		const detail =
-			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		const detail = (error as { detail?: unknown } | undefined)?.detail ?? error;
 		return {
 			error:
 				typeof detail === "string"
@@ -217,8 +238,7 @@ export async function deleteDocument(
 		path: { document_id: documentId },
 	});
 	if (error) {
-		const detail =
-			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		const detail = (error as { detail?: unknown } | undefined)?.detail ?? error;
 		return {
 			error:
 				typeof detail === "string"
@@ -238,8 +258,7 @@ export async function deleteFieldReview(
 		path: { document_id: documentId, review_id: reviewId },
 	});
 	if (error) {
-		const detail =
-			(error as { detail?: unknown } | undefined)?.detail ?? error;
+		const detail = (error as { detail?: unknown } | undefined)?.detail ?? error;
 		return {
 			error:
 				typeof detail === "string"

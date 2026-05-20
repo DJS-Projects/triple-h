@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
 from app.models import User
+from app.observability import is_feature_on
 from app.services import persistence
 from app.services.blob_store import BlobStore, get_blob_store
 from app.services.architecture import DocType
@@ -121,6 +122,34 @@ def _blob_store() -> BlobStore:
 async def list_extraction_models() -> list[ExtractionModelOption]:
     """Return the model menu shown in the FE upload dropdown."""
     return EXTRACTION_MODELS
+
+
+class ExtractionFeatureFlags(BaseModel):
+    """Boolean feature flags the FE upload surface needs to know about.
+
+    Read each on demand via GrowthBook (`is_feature_on`). When the SDK
+    isn't configured or the flag isn't defined, the underlying read
+    returns the safe default — same fallback the pipeline uses — so
+    a flag-server outage just hides the experimental UI rather than
+    breaking the page.
+    """
+
+    use_arq_pipeline: bool
+
+
+@router.get("/extract/feature-flags", response_model=ExtractionFeatureFlags)
+async def get_extraction_feature_flags() -> ExtractionFeatureFlags:
+    """Return flag values that gate FE upload-surface UI.
+
+    Currently:
+      * `use_arq_pipeline` — when False, the FE hides the pipeline-mode
+        selector entirely; all submissions take the legacy single-pass
+        path on the worker. When True, the selector becomes available
+        as a per-batch override of the GrowthBook default.
+    """
+    return ExtractionFeatureFlags(
+        use_arq_pipeline=is_feature_on("use_arq_pipeline", default=False),
+    )
 
 
 @router.post("/extract", response_model=ExtractResponse)

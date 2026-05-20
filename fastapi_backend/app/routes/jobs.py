@@ -118,6 +118,18 @@ async def submit_extraction_job(
         Form(description="LiteLLM model id"),
     ] = "ollama-gemma4-31b",
     dpi: Annotated[int, Form(description="PDF render DPI")] = 150,
+    pipeline_mode: Annotated[
+        str | None,
+        Form(
+            description=(
+                "Per-batch override for the ARQ vs single-pass selection. "
+                "Accepted: 'auto' (or omit) — defer to the use_arq_pipeline "
+                "GrowthBook flag; 'arq' — force ARQ; 'single_pass' — force "
+                "legacy single-call. Stored on the job's request_meta and "
+                "applied by the worker."
+            )
+        ),
+    ] = None,
     idempotency_key: Annotated[
         str | None,
         Header(
@@ -162,6 +174,22 @@ async def submit_extraction_job(
             ),
         )
 
+    # Normalise pipeline_mode. Empty string from FE multipart forms is
+    # equivalent to "not sent" — treat as auto.
+    normalised_pipeline_mode: str | None
+    if pipeline_mode is None or pipeline_mode in ("", "auto"):
+        normalised_pipeline_mode = None
+    elif pipeline_mode in ("arq", "single_pass"):
+        normalised_pipeline_mode = pipeline_mode
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"unknown pipeline_mode {pipeline_mode!r}; allowed: "
+                "auto, arq, single_pass"
+            ),
+        )
+
     # Server-generate an idempotency key when the client omits one.
     # The (content_hash, model, doc_type) index still dedups identical
     # re-uploads even without a client key.
@@ -183,6 +211,11 @@ async def submit_extraction_job(
         "mime_type": file.content_type or "application/pdf",
         "size_bytes": len(file_bytes),
     }
+    # Only carry pipeline_mode in request_meta when the caller explicitly
+    # picked a variant. Absence means "let the worker fall back to the
+    # GrowthBook flag" — symmetric with the pipeline's own default.
+    if normalised_pipeline_mode is not None:
+        request_meta["pipeline_mode"] = normalised_pipeline_mode
 
     # Snapshot document attributes BEFORE handing off to the queue
     # service. create_or_get_job() does an INSERT-then-catch-IntegrityError

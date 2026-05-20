@@ -558,6 +558,7 @@ async def extract_structured(
     dpi: int = 150,
     architecture: DoclingArchitecture | None = None,
     on_stage: StageCallback | None = None,
+    pipeline_mode: str | None = None,
 ) -> ExtractionPipelineResult:
     """One extractor call + page render + LLM call → typed result.
 
@@ -571,6 +572,14 @@ async def extract_structured(
     granular progress to the FE (`classifying`, `ocr`, `anchoring`,
     `extracting`, `postprocess`). Exceptions in the callback are swallowed
     — observability must never crash the pipeline.
+
+    `pipeline_mode` is a per-request override for the ARQ vs single-pass
+    selection. Accepted values:
+      * None / "auto" — fall back to GrowthBook flag `use_arq_pipeline`
+      * "arq" — force the ARQ-augmented two-stage path
+      * "single_pass" — force the legacy single-call path
+    Unknown values raise ValueError; callers (routes / worker) validate
+    upstream so a bad value never reaches this layer in production.
     """
     arch = architecture or default_architecture()
 
@@ -654,12 +663,31 @@ async def extract_structured(
         else:
             llm_images = []
 
-        # Variant selection: ARQ when flag on (default off → safer
-        # single-pass on observability outage). Read-once per request so
-        # mid-pipeline flag flips don't fork behaviour within a call.
-        use_arq = is_feature_on("use_arq_pipeline", default=False)
+        # Variant selection precedence:
+        #   1. Explicit `pipeline_mode` arg ("arq" / "single_pass") from the
+        #      caller — FE per-batch override lives here.
+        #   2. GrowthBook flag `use_arq_pipeline` (default off → safer
+        #      single-pass on observability outage).
+        # Read-once per request so mid-pipeline flag flips don't fork
+        # behaviour within a call. Unknown explicit modes raise — the
+        # routes validate before getting here, so this is just a guard.
+        if pipeline_mode in (None, "auto"):
+            use_arq = is_feature_on("use_arq_pipeline", default=False)
+            variant_source = "flag"
+        elif pipeline_mode == "arq":
+            use_arq = True
+            variant_source = "explicit"
+        elif pipeline_mode == "single_pass":
+            use_arq = False
+            variant_source = "explicit"
+        else:
+            raise ValueError(
+                f"pipeline_mode must be one of None/'auto'/'arq'/'single_pass'; "
+                f"got {pipeline_mode!r}"
+            )
         variant = "arq" if use_arq else "single_pass"
         root_span.set_attribute("pipeline_variant", variant)
+        root_span.set_attribute("pipeline_variant_source", variant_source)
         root_span.set_attribute("page_count", artifacts.page_count or 0)
 
         if use_arq:

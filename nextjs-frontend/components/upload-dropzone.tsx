@@ -12,7 +12,11 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { fetchExtractionModels, submitExtractionJob } from "@/lib/api";
+import {
+	fetchExtractionFeatureFlags,
+	fetchExtractionModels,
+	submitExtractionJob,
+} from "@/lib/api";
 import { DOC_TYPE_LABELS, DOC_TYPES, uploadSchema } from "@/lib/definitions";
 
 // Two-stage flow:
@@ -165,6 +169,21 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const [docType, setDocType] = useState<string>("");
 	const [model, setModel] = useState<string>("");
 	const [models, setModels] = useState<ExtractionModel[]>([]);
+	// Pipeline mode override. "auto" defers to the backend's GrowthBook
+	// flag (use_arq_pipeline). Explicit picks ("arq" / "single_pass") get
+	// stamped onto request_meta and force the worker's variant for this
+	// batch only — no global flag mutation.
+	const [pipelineMode, setPipelineMode] = useState<
+		"auto" | "arq" | "single_pass"
+	>("auto");
+	// ARQ is gated by the GrowthBook flag `use_arq_pipeline`. When the
+	// flag is off, the pipeline-mode selector is hidden entirely — there
+	// is no per-batch override available and submissions take the single-
+	// pass path. When the flag is on, the selector becomes a per-batch
+	// opt-out from ARQ. Defaults to false so a flag-server outage just
+	// keeps the experimental UI hidden (matches the backend's safe-default
+	// fallback in `is_feature_on`).
+	const [arqEnabled, setArqEnabled] = useState(false);
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
 	// Already-extracted files from the most recent submit batch. Surfaced as
@@ -192,6 +211,15 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 			setModels(list);
 			const defaultModel = list.find((m) => m.is_default);
 			if (defaultModel) setModel(defaultModel.id);
+		});
+		// Flag fetch is independent of model fetch — separate Promise so a
+		// failure on one doesn't suppress the other. On error we leave
+		// arqEnabled at its default `false`, which hides the selector
+		// (safe default — matches `is_feature_on`'s server-side fallback).
+		fetchExtractionFeatureFlags().then((res) => {
+			if (cancelled) return;
+			if ("error" in res) return;
+			setArqEnabled(res.use_arq_pipeline);
 		});
 		return () => {
 			cancelled = true;
@@ -250,6 +278,13 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 			fd.append("file", file);
 			fd.append("doc_type", docType);
 			if (model) fd.append("model", model);
+			// Only send pipeline_mode when ARQ is actually enabled (the
+			// selector is visible) AND the user picked an explicit variant.
+			// "auto" or a hidden selector → omit so the backend falls
+			// through to the GrowthBook flag default.
+			if (arqEnabled && pipelineMode !== "auto") {
+				fd.append("pipeline_mode", pipelineMode);
+			}
 			const idemKey = generateIdemKey();
 			const result = await submitExtractionJob(fd, idemKey);
 			if ("error" in result) {
@@ -292,7 +327,7 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 		} else {
 			setStatus("idle");
 		}
-	}, [staged, docType, model, onJobSubmitted]);
+	}, [staged, docType, model, pipelineMode, arqEnabled, onJobSubmitted]);
 
 	const onDrop = useCallback(
 		(e: React.DragEvent<HTMLDivElement>) => {
@@ -311,6 +346,12 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const docTypeDisplay = docType
 		? DOC_TYPE_LABELS[docType as (typeof DOC_TYPES)[number]]
 		: "Auto-classify";
+	const pipelineModeDisplay =
+		pipelineMode === "auto"
+			? "Auto pipeline"
+			: pipelineMode === "arq"
+				? "ARQ pipeline"
+				: "Single-pass pipeline";
 
 	const openFilePicker = () => inputRef.current?.click();
 
@@ -358,6 +399,26 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 						))}
 					</select>
 				</label>
+
+				{arqEnabled ? (
+					<label className="flex items-center gap-2 text-sm">
+						<span className="text-muted-foreground">Pipeline</span>
+						<select
+							value={pipelineMode}
+							onChange={(e) =>
+								setPipelineMode(
+									e.target.value as "auto" | "arq" | "single_pass",
+								)
+							}
+							disabled={busy}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="auto">Auto (flag default)</option>
+							<option value="arq">ARQ (anchored)</option>
+							<option value="single_pass">Single-pass</option>
+						</select>
+					</label>
+				) : null}
 
 				<label className="flex items-center gap-2 text-sm">
 					<span className="text-muted-foreground">Model</span>
@@ -484,7 +545,16 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 							<p className="font-mono text-[11px] text-muted-foreground">
 								{staged.length} file{staged.length === 1 ? "" : "s"} ·{" "}
 								{formatBytes(totalBytes)} · batch defaults:{" "}
-								<span className="text-foreground">{docTypeDisplay}</span> ·{" "}
+								<span className="text-foreground">{docTypeDisplay}</span>
+								{arqEnabled ? (
+									<>
+										{" · "}
+										<span className="text-foreground">
+											{pipelineModeDisplay}
+										</span>
+									</>
+								) : null}
+								{" · "}
 								<span className="text-foreground">{selectedModelLabel}</span>
 							</p>
 						</div>

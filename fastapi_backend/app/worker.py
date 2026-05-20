@@ -152,14 +152,19 @@ async def _process_job(job: ExtractionJob) -> None:
         # / postprocess) into job.stage during each phase boundary. The
         # FE's SSE stream picks these up within its 500ms poll cadence
         # and updates the per-row label.
+        # request_meta carries per-batch knobs the worker honours blindly:
+        # dpi (from the upload form) and pipeline_mode (FE override of the
+        # ARQ vs single-pass flag default). pipeline_mode is only present
+        # when the submitter passed an explicit value — its absence means
+        # "use the GrowthBook flag", which the pipeline handles.
+        rm = job.request_meta if isinstance(job.request_meta, dict) else {}
         result = await extract_structured(
             pdf_bytes,
             filename,
             doc_type=job.doc_type,  # type: ignore[arg-type]
             model=job.model,
-            dpi=job.request_meta.get("dpi", 150)
-            if isinstance(job.request_meta, dict)
-            else 150,
+            dpi=rm.get("dpi", 150),
+            pipeline_mode=rm.get("pipeline_mode"),
             on_stage=set_stage,
         )
 

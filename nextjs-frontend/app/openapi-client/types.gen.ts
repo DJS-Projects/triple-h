@@ -273,6 +273,11 @@ export type BodyJobsSubmitExtractionJob = {
      * PDF render DPI
      */
     dpi?: number;
+    /**
+     * Pipeline Mode
+     * Per-batch override for the ARQ vs single-pass selection. Accepted: 'auto' (or omit) — defer to the use_arq_pipeline GrowthBook flag; 'arq' — force ARQ; 'single_pass' — force legacy single-call. Stored on the job's request_meta and applied by the worker.
+     */
+    pipeline_mode?: string | null;
 };
 
 /**
