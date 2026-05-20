@@ -64,8 +64,8 @@ trap 'docker compose --profile test rm -sf test-db >/dev/null 2>&1' EXIT
 cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests/ -v"""
 
 [tasks."be:test:eval"]
-description = "Run E2E eval tests (requires API key)"
-run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- uv run pytest tests_eval/ -m eval -v"
+description = "Run E2E eval tests (requires API key + Docker stack for LiteLLM)"
+run = "cd fastapi_backend && dotenvx run -fk ../.env.keys -- sh -c 'LITELLM_BASE_URL=http://localhost:4000 uv run pytest tests_eval/ -m eval -v -s'"
 
 [tasks."be:test:all"]
 description = "Run all backend tests (auto-starts + tears down test DB)"

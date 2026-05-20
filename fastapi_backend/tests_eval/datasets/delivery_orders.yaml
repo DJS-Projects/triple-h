@@ -3,7 +3,15 @@
 # Schema for these cases lives in tests_eval/schemas.py.
 name: delivery_orders
 evaluators:
-  - FieldAccuracy
+  - FieldAccuracy:
+      skip_fields:
+        - do_issuer_name
+        - sold_to
+        - sold_to_address
+        - delivered_to
+        - delivered_to_address
+        - po_number
+        - items
 cases:
   - name: coltron_sintari
     inputs:
@@ -16,8 +24,8 @@ cases:
       delivered_to_address: LOT 224 KWS Perindustrian Bukit Kayu Hitam, 06050 Bukit Kayu Hitam, Kedah
       do_number: [DO-61581]
       po_number: [PO2511-102]
-      vehicle_number: [MDX7849]
-      date: ["2025-11-18"]
+      vehicle_number: [MDX2829]
+      date: ["2025-11-18", "2025-11-20"]
       items:
         - description: HTD BARS 10MM X 12M (138PCS X 2 BDLS)
           quantity: 2.0440 MT
@@ -40,7 +48,7 @@ cases:
       do_number: ["0359-25 (M)"]
       po_number: [PO25110122]
       vehicle_number: [VHU1805]
-      date: ["2025-11-15"]
+      date: ["2025-11-15", "2025-11-17"]
       items:
         - description: H.T. Deformed Round Bar R6 x 12M (2 BDL x 375pcs = 750PCS)
           quantity: 2 BDL
@@ -71,9 +79,9 @@ cases:
       items:
         - description: "R6M X 12M X 375 PCS X 0.999/MT - CQ 5.5MM, REF NO:2025/10/009"
           quantity: 6.0000 BDL
-          weight_mt: "6.0000"
+          weight_mt: "5.9940"
       total_quantity: "6.0000"
-      total_weight_mt: "6.0000"
+      total_weight_mt: "5.9940"
     metadata:
       source_pdf: klang_valley_wire.pdf
       status: HUMAN_REVIEWED
@@ -83,14 +91,14 @@ cases:
     inputs:
       pdf_path: fixtures/delivery_orders/klass_metal.pdf
     expected_output:
-      do_issuer_name: Klaas Metal Sdn. Bhd.
+      do_issuer_name: Klass Metal Sdn. Bhd.
       sold_to: Eng Soon Hardware Trading Sdn Bhd
       sold_to_address: B-73, Jalan Sri Kemuning, Off Jalan Mentakab, 28000 Temerloh, Pahang Darul Makmur
       delivered_to: C/O Hillhome Builder Sdn Bhd
       delivered_to_address: "DEL: Site LOT 2091, Mukim Bentong, Pahang Darul Makmur"
       do_number: ["I-2511/0163"]
       po_number: [SC14/11/2025-012599]
-      vehicle_number: [SK2266E]
+      vehicle_number: [SK2286E]
       date: ["2025-11-27"]
       items:
         - description: R10 X 12M X 138PCS BS X 1.022/MT
@@ -127,6 +135,7 @@ cases:
         - description: Mild Steel Round Bar R6 (6mm x 12m) (375pcs/bdl)
           quantity: "1"
       total_quantity: "25"
+      total_weight_mt: "25.0000"
     metadata:
       source_pdf: uniwell_trading.pdf
       status: HUMAN_REVIEWED

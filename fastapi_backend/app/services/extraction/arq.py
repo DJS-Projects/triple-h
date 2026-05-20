@@ -122,7 +122,8 @@ def _id_code_audit_field() -> Any:
             "number, P/O number, vehicle number, weighing number, "
             "etc), list any positions containing OCR-ambiguous "
             "characters (S vs 5, l/I vs 1, O vs 0, B vs 8, Z vs 2, "
-            "G vs 6). Flag positions only — do NOT correct them in "
+            "G vs 6, / vs 1 in vehicle plate numbers). Flag "
+            "positions only — do NOT correct them in "
             "the extracted payload. Format: 'po_number[3]: S could "
             "be 5'. If no ambiguities, write 'none'."
         )

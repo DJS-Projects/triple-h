@@ -75,6 +75,21 @@ def normalize_weight_4dp(value: str) -> str | None:
     return f"{formatted}{sep}{unit}"
 
 
+def _parse_numeric_weight(value: str) -> float | None:
+    """Extract the numeric part of a weight string for aggregation.
+
+    Returns the float value or None when the value can't be parsed.
+    Unlike `normalize_weight_4dp` this returns a number, not a string.
+    """
+    m = _WEIGHT_RE.match(value)
+    if not m:
+        return None
+    try:
+        return float(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
 # ─── Date ISO normalization ──────────────────────────────────────────────────
 
 
@@ -92,6 +107,19 @@ def normalize_date_iso(value: str) -> str | None:
     except (ValueError, OverflowError):
         return None
     return parsed.date().isoformat()
+
+
+# ─── Plate whitespace normalization ─────────────────────────────────────────
+
+
+def normalize_plate(value: str) -> str:
+    """Remove all whitespace from a license plate string.
+
+    Malaysian plates use a standard format (e.g. "JWP 8186") that the LLM
+    occasionally reproduces with variable spacing ("JWP8186", "JWP  8186").
+    Downstream consumers expect no spaces, so strip them all.
+    """
+    return "".join(value.split())
 
 
 # ─── Company canonicalization ────────────────────────────────────────────────
@@ -166,6 +194,12 @@ _DATE_LIST_FIELDS: Final[dict[str, frozenset[str]]] = {
     "delivery_order": frozenset({"date"}),
 }
 
+_PLATE_FIELDS: Final[dict[str, frozenset[str]]] = {
+    "delivery_order": frozenset({"vehicle_number"}),
+    "weighing_bill": frozenset({"vehicle_no"}),
+    "petrol_bill": frozenset({"plate_number"}),
+}
+
 _COMPANY_FIELDS: Final[dict[str, frozenset[str]]] = {
     "delivery_order": frozenset({"do_issuer_name", "sold_to", "delivered_to"}),
     "invoice": frozenset({"bill_to", "from_company"}),
@@ -174,6 +208,15 @@ _COMPANY_FIELDS: Final[dict[str, frozenset[str]]] = {
 # Item-list fields with their inner-key rules (currently weight-only).
 _ITEM_LIST_RULES: Final[dict[str, dict[str, str]]] = {
     "delivery_order": {"items": "weight_mt"},
+}
+
+# Aggregate totals that can be computed from line items when the LLM misses them.
+# Key: doc_type → { aggregate_field: item_inner_field }.
+_AGGREGATE_RULES: Final[dict[str, dict[str, str]]] = {
+    "delivery_order": {
+        "total_weight_mt": "weight_mt",
+        "total_quantity": "quantity",
+    },
 }
 
 
@@ -221,6 +264,14 @@ def postprocess_extracted(
                 _apply_or_keep(item, normalize_date_iso) for item in out[field]
             ]
 
+    # Plate whitespace — handles both list fields (DeliveryOrder.vehicle_number)
+    # and scalar fields (WeighingBill.vehicle_no, PetrolBill.plate_number).
+    for field in _PLATE_FIELDS.get(doc_type, frozenset()):
+        if field in out and isinstance(out[field], list):
+            out[field] = [_apply_or_keep(item, normalize_plate) for item in out[field]]
+        elif field in out:
+            out[field] = _apply_or_keep(out[field], normalize_plate)
+
     # Company canonicalization (no-op when registry is empty)
     if company_registry:
         for field in _COMPANY_FIELDS.get(doc_type, frozenset()):
@@ -248,5 +299,41 @@ def postprocess_extracted(
                 else item
                 for item in out[list_field]
             ]
+
+    # Aggregate totals from line items when LLM left them missing.
+    for aggregate_field, item_inner_field in _AGGREGATE_RULES.get(doc_type, {}).items():
+        if aggregate_field not in out or out[aggregate_field] in (None, ""):
+            items = out.get("items")
+            if not isinstance(items, list) or not items:
+                continue
+            values: list[float] = []
+            unit_suffix = ""
+            for item in items:
+                raw = item.get(item_inner_field) if isinstance(item, dict) else None
+                if not raw:
+                    continue
+                if aggregate_field == "total_weight_mt":
+                    weight_val = _parse_numeric_weight(raw)
+                    if weight_val is not None:
+                        values.append(weight_val)
+                        if not unit_suffix:
+                            m = _WEIGHT_RE.match(raw)
+                            if m and m.group(2):
+                                unit_suffix = f" {m.group(2).strip()}"
+                else:
+                    try:
+                        num = float(str(raw).replace(",", ""))
+                        values.append(num)
+                    except ValueError:
+                        pass
+            if not values:
+                continue
+            total = sum(values)
+            if aggregate_field == "total_weight_mt":
+                out[aggregate_field] = f"{total:.4f}{unit_suffix}"
+            else:
+                out[aggregate_field] = (
+                    str(int(total)) if total == int(total) else f"{total}"
+                )
 
     return out

@@ -113,6 +113,7 @@ _VEHICLE_PLATE_HINT: Final = (
     "K, KV, L, M, N, P, Q-prefix for Sarawak, R, S-prefix for Sabah, T, V, W) "
     "followed by 1-2 alpha + 1-4 digits + optional trailing alpha. Examples: "
     "WXY1234, JHU8805, QAB123, SAA1234A. NO slashes, dots, or other punctuation. "
+    "Do not remove any characters, instead convert them to the closest valid format (e.g. O → 0, / → 1) if needed. "
     "If the document genuinely shows a non-plate identifier (fleet number, "
     "trailer ID), return null rather than guessing."
 )

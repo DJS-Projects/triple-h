@@ -54,3 +54,6 @@ local-shared-data/traces/
 # can't sneak back into commits. openapi.json (no underscore) stays
 # tracked because the FE codegen reads it.
 local-shared-data/_*.py
+
+# Test Evals Reports
+fastapi_backend/tests_eval/reports/*

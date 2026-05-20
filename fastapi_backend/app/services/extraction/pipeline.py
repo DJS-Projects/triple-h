@@ -131,7 +131,9 @@ _PROMPT_BY_TYPE: dict[DocType, str] = {
         "Extract the delivery order. Cross-reference OCR markdown with the page "
         "image — prefer visual ground truth where they disagree. Pay attention to: "
         "issuer letterhead, sold-to/delivered-to blocks, DO/PO numbers, dates, "
-        "vehicle plates, line items table, and totals."
+        "vehicle plates, line items table with quantities and weights per item, "
+        "total weight (sum of line item weights), and total quantity "
+        "(sum of line item quantities)."
     ),
     "weighing_bill": (
         "Extract the weighing bill. Capture all weights (gross, tare, net), "
