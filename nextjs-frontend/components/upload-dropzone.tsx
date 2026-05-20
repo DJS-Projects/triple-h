@@ -9,6 +9,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fetchExtractionModels, submitExtractionJob } from "@/lib/api";
@@ -60,7 +61,9 @@ function generateIdemKey(): string {
 	}
 	bytes[6] = (bytes[6]! & 0x0f) | 0x40;
 	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-	const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+	const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+		"",
+	);
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
@@ -81,7 +84,12 @@ interface StagedFileRowProps {
 	onRemove: (index: number) => void;
 }
 
-function StagedFileRow({ file, index, disabled, onRemove }: StagedFileRowProps) {
+function StagedFileRow({
+	file,
+	index,
+	disabled,
+	onRemove,
+}: StagedFileRowProps) {
 	const [expanded, setExpanded] = useState(false);
 
 	// Build the object URL only when the row is first expanded; revoke on
@@ -159,6 +167,12 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const [models, setModels] = useState<ExtractionModel[]>([]);
 	const [status, setStatus] = useState<Status>("idle");
 	const [error, setError] = useState<string | null>(null);
+	// Already-extracted files from the most recent submit batch. Surfaced as
+	// an inline notice with links to /documents/{id} so users see WHICH files
+	// were skipped without those rows cluttering the live queue panel.
+	const [alreadyExtracted, setAlreadyExtracted] = useState<
+		{ document_id: string; filename: string }[]
+	>([]);
 	const [dragOver, setDragOver] = useState(false);
 	// Track which model notes the user has dismissed within this session.
 	// Keyed by model id so switching models re-shows the new model's note,
@@ -202,9 +216,8 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 			setStatus("error");
 			return;
 		}
-		setError(
-			rejected.length > 0 ? `skipped: ${rejected.join(", ")}` : null,
-		);
+		setError(rejected.length > 0 ? `skipped: ${rejected.join(", ")}` : null);
+		setAlreadyExtracted([]);
 		setStaged((prev) => [...prev, ...accepted]);
 		setStatus("selected");
 	}, []);
@@ -216,6 +229,7 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 	const clearAll = useCallback(() => {
 		setStaged([]);
 		setError(null);
+		setAlreadyExtracted([]);
 		setStatus("idle");
 	}, []);
 
@@ -223,12 +237,14 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 		if (staged.length === 0) return;
 		setStatus("submitting");
 		setError(null);
+		setAlreadyExtracted([]);
 
 		// Submit sequentially — POSTs are cheap (~200ms each) but staying
 		// sequential preserves a stable ordering in the queue panel and
 		// keeps any per-submission error attributable to a single file.
 		const remaining: File[] = [];
 		const errors: string[] = [];
+		const extractedNow: { document_id: string; filename: string }[] = [];
 		for (const file of staged) {
 			const fd = new FormData();
 			fd.append("file", file);
@@ -239,6 +255,21 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 			if ("error" in result) {
 				remaining.push(file);
 				errors.push(`${file.name}: ${result.error}`);
+				continue;
+			}
+			// Already-extracted short-circuit: skip queue insertion and
+			// collect for the inline notice. The queue panel should only
+			// carry rows that have work in flight; deduped-succeeded
+			// uploads are immediately available via /documents/{id}, so a
+			// row going pending→running→succeeded would be misleading.
+			// In-flight dedupes (status pending/running) and dedupes onto
+			// failed jobs still flow into the queue so the user keeps
+			// visibility on the existing work.
+			if (result.job.deduped && result.job.status === "succeeded") {
+				extractedNow.push({
+					document_id: result.job.document_id,
+					filename: file.name,
+				});
 				continue;
 			}
 			onJobSubmitted({
@@ -252,6 +283,9 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 			});
 		}
 		setStaged(remaining);
+		if (extractedNow.length > 0) {
+			setAlreadyExtracted(extractedNow);
+		}
 		if (errors.length > 0) {
 			setError(errors.join("\n"));
 			setStatus("error");
@@ -412,9 +446,7 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 									: "border-border hover:border-foreground/60 hover:bg-muted/30"
 							}`
 						: `gap-3 border-solid p-3 ${
-								dragOver
-									? "border-foreground/60"
-									: "border-border"
+								dragOver ? "border-foreground/60" : "border-border"
 							}`
 				}`}
 			>
@@ -439,7 +471,8 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 							Drop PDFs here or click to choose (multiple allowed)
 						</p>
 						<p className="font-mono text-xs text-muted-foreground">
-							Staged for review before queueing · no jobs fire until you click Submit
+							Staged for review before queueing · no jobs fire until you click
+							Submit
 						</p>
 					</>
 				) : (
@@ -452,9 +485,7 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 								{staged.length} file{staged.length === 1 ? "" : "s"} ·{" "}
 								{formatBytes(totalBytes)} · batch defaults:{" "}
 								<span className="text-foreground">{docTypeDisplay}</span> ·{" "}
-								<span className="text-foreground">
-									{selectedModelLabel}
-								</span>
+								<span className="text-foreground">{selectedModelLabel}</span>
 							</p>
 						</div>
 
@@ -516,6 +547,27 @@ export function UploadDropzone({ onJobSubmitted }: UploadDropzoneProps) {
 				<p className="whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
 					{error}
 				</p>
+			) : null}
+
+			{alreadyExtracted.length > 0 ? (
+				<div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-sm">
+					<p className="font-medium text-muted-foreground">
+						Already extracted — open existing result
+						{alreadyExtracted.length > 1 ? "s" : ""}:
+					</p>
+					<ul className="mt-1 space-y-0.5">
+						{alreadyExtracted.map((item) => (
+							<li key={item.document_id}>
+								<Link
+									href={`/documents/${item.document_id}`}
+									className="font-mono text-xs hover:underline"
+								>
+									{item.filename}
+								</Link>
+							</li>
+						))}
+					</ul>
+				</div>
 			) : null}
 		</div>
 	);
